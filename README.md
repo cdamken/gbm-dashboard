@@ -184,4 +184,13 @@ gbm-dashboard/
 
 ---
 
-*v0.1 — primer entregable: portfolio + posiciones.*
+## 📜 Licencia
+
+[Business Source License 1.1](LICENSE). Uso personal, educativo e interno
+sin restricciones. Ofrecer este código como servicio comercial competitivo
+requiere acuerdo aparte. El 2030-05-19 se convierte automáticamente en
+Apache 2.0. Versiones v0.1 y v0.2 fueron publicadas bajo MIT.
+
+---
+
+*v0.3 — relicensed under BSL 1.1.*
