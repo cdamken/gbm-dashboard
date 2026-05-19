@@ -45,16 +45,20 @@ ensure_venv() {
 }
 
 ensure_env() {
+    # The dashboard's web UI now has a configuration modal that writes
+    # app/.env automatically. If the file doesn't exist yet, just start
+    # the server so the user can configure from the browser.
     if [ ! -f "$APP_DIR/.env" ]; then
         cat <<EOF
 
-⚠️  Missing app/.env — create it from app/.env.example:
-
-   cp $APP_DIR/.env.example $APP_DIR/.env
-   $EDITOR $APP_DIR/.env
+ℹ️  No app/.env yet — the dashboard will open with a setup screen
+   asking for your GBM credentials. Configure them in the browser
+   and the file will be created automatically with secure permissions.
 
 EOF
-        exit 1
+        ensure_venv
+        start_server
+        exit 0
     fi
 }
 

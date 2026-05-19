@@ -43,6 +43,13 @@ h1 {
 }
 .subtitle .update-btn:hover { background: rgba(96, 165, 250, 0.1); }
 .subtitle .update-btn:disabled { opacity: 0.5; cursor: wait; }
+.subtitle .settings-btn {
+  margin-left: 6px;
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--muted); padding: 4px 10px; border-radius: 6px;
+  cursor: pointer; font-size: 12px;
+}
+.subtitle .settings-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
 
 .cards {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -192,6 +199,18 @@ tr:hover { background: rgba(255,255,255,0.02); }
   letter-spacing: 8px; margin-bottom: 16px;
 }
 .modal input.totp:focus { outline: none; border-color: var(--blue); }
+.modal label {
+  display: block; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;
+  margin-top: 14px; font-weight: 600;
+}
+.modal label:first-of-type { margin-top: 0; }
+.modal input.field {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); padding: 12px 14px; border-radius: 8px;
+  font-size: 14px; font-family: -apple-system, sans-serif;
+}
+.modal input.field:focus { outline: none; border-color: var(--blue); }
 .modal .modal-btns { display: flex; gap: 12px; justify-content: flex-end; }
 .modal button {
   padding: 10px 20px; border-radius: 8px; border: none;
@@ -225,6 +244,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
   <span id="contract-label">Contrato: cargando...</span> · Última actualización:
   <span id="last-update">—</span>
   <button class="update-btn" id="update-btn" onclick="triggerUpdate()">⟳ Update</button>
+  <button class="settings-btn" id="settings-btn" onclick="openConfigModal()" title="Configurar credenciales">⚙ Cuenta</button>
 </div>
 
 <div id="error-box"></div>
@@ -330,6 +350,47 @@ tr:hover { background: rgba(255,255,255,0.02); }
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
   No afiliado con Grupo Bursátil Mexicano.
+</div>
+
+<!-- ------------- Config modal (email + password) ------------- -->
+<div class="modal-backdrop" id="config-modal" onclick="closeModalIfBackdrop(event, 'config')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>⚙ Configuración de cuenta GBM+</h2>
+    <p>
+      Estas credenciales se guardan en <code>app/.env</code> (permisos
+      <code>0600</code>, solo tu usuario las puede leer) y nunca salen de
+      tu máquina. Si tienes 2FA activado, el código TOTP se pedirá
+      después al actualizar.
+    </p>
+    <div class="modal-error hidden" id="config-error"></div>
+    <label for="config-email">Email</label>
+    <input
+      type="email"
+      class="field"
+      id="config-email"
+      autocomplete="username"
+      placeholder="tu-email@dominio.com"
+      oninput="onConfigInput()"
+    >
+    <label for="config-password">Contraseña</label>
+    <input
+      type="password"
+      class="field"
+      id="config-password"
+      autocomplete="current-password"
+      placeholder="••••••••"
+      oninput="onConfigInput()"
+      onkeydown="if (event.key === 'Enter') submitConfig()"
+    >
+    <div style="height: 20px;"></div>
+    <div class="modal-btns">
+      <button class="secondary" onclick="closeConfigModal()">Cancelar</button>
+      <button class="primary" id="config-submit" onclick="submitConfig()" disabled>Guardar</button>
+    </div>
+    <div class="modal-hint">
+      Todo es local. Cero telemetría. Cero envío fuera de tu computadora.
+    </div>
+  </div>
 </div>
 
 <!-- ------------- TOTP modal ------------- -->
@@ -712,17 +773,15 @@ async function triggerUpdate(totpCode = null) {
   }
   if (payload.status === "auth_failed") {
     closeModal();
-    alert(
-      "Las credenciales en app/.env son incorrectas o GBM las rechazó.\n"
-      + "Edita app/.env y reintenta."
-    );
+    openConfigModal();
+    document.getElementById("config-error").textContent =
+      "Las credenciales son incorrectas o GBM las rechazó. Corrige y reintenta.";
+    document.getElementById("config-error").classList.remove("hidden");
     return;
   }
   if (payload.status === "config_error") {
     closeModal();
-    alert(
-      "Falta configuración: app/.env no existe o no tiene GBM_EMAIL/GBM_PASSWORD."
-    );
+    openConfigModal(true);
     return;
   }
   if (payload.status === "api_error" || payload.status === "timeout") {
@@ -754,8 +813,91 @@ function closeModal() {
   document.getElementById("totp-modal").classList.remove("show");
 }
 
-function closeModalIfBackdrop(e) {
-  if (e.target.id === "totp-modal") closeModal();
+function closeModalIfBackdrop(e, which) {
+  const id = which === "config" ? "config-modal" : "totp-modal";
+  if (e.target.id === id) {
+    if (which === "config") closeConfigModal();
+    else closeModal();
+  }
+}
+
+// ----------------------------------------------------------------------
+// Config modal (email + password)
+// ----------------------------------------------------------------------
+async function loadConfigStatus() {
+  try {
+    const res = await fetch("/config");
+    const data = await res.json();
+    return data;
+  } catch (_) {
+    return { configured: false, email: null };
+  }
+}
+
+async function maybeShowConfigOnFirstLoad() {
+  const status = await loadConfigStatus();
+  if (!status.configured) {
+    openConfigModal(/* firstTime = */ true);
+  }
+}
+
+function openConfigModal(firstTime = false) {
+  const modal = document.getElementById("config-modal");
+  const errEl = document.getElementById("config-error");
+  errEl.classList.add("hidden");
+  // Pre-fill email if we know it.
+  loadConfigStatus().then(s => {
+    const emailEl = document.getElementById("config-email");
+    const pwEl = document.getElementById("config-password");
+    if (s.email && !firstTime) emailEl.value = s.email;
+    pwEl.value = "";
+    document.getElementById("config-submit").disabled = true;
+    modal.classList.add("show");
+    setTimeout(() => (s.email ? pwEl : emailEl).focus(), 100);
+  });
+}
+
+function closeConfigModal() {
+  document.getElementById("config-modal").classList.remove("show");
+}
+
+function onConfigInput() {
+  const email = document.getElementById("config-email").value.trim();
+  const pw = document.getElementById("config-password").value;
+  const ok = email.includes("@") && pw.length >= 4;
+  document.getElementById("config-submit").disabled = !ok;
+}
+
+async function submitConfig() {
+  const email = document.getElementById("config-email").value.trim();
+  const password = document.getElementById("config-password").value;
+  const btn = document.getElementById("config-submit");
+  const errEl = document.getElementById("config-error");
+  btn.disabled = true;
+  btn.textContent = "Guardando...";
+
+  try {
+    const res = await fetch("/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const payload = await res.json();
+    if (res.ok && payload.status === "ok") {
+      btn.textContent = "Guardar";
+      closeConfigModal();
+      // After saving credentials, kick off an update (will prompt TOTP).
+      triggerUpdate();
+      return;
+    }
+    errEl.textContent = payload.detail || "Error guardando credenciales.";
+    errEl.classList.remove("hidden");
+  } catch (err) {
+    errEl.textContent = "No se pudo conectar al servidor.";
+    errEl.classList.remove("hidden");
+  }
+  btn.textContent = "Guardar";
+  onConfigInput();  // reevaluate disabled state
 }
 
 function onTotpInput(e) {
@@ -772,10 +914,16 @@ function submitTotp() {
   triggerUpdate(code);
 }
 
-// Close modal with Escape.
+// Close any open modal with Escape.
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeModal();
+  if (e.key !== "Escape") return;
+  closeModal();
+  closeConfigModal();
 });
+
+// On first ever load (no credentials saved yet) the config modal opens
+// automatically so the user can set things up without touching the terminal.
+maybeShowConfigOnFirstLoad();
 
 load();
 </script>

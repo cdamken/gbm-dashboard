@@ -35,19 +35,25 @@ buscador, filtros, ordenamiento y resumen multi-cuenta.
 ### Primer uso
 
 ```bash
-cd ~/damkencloud/Claude/gbm-dashboard
-
-# Configurar credenciales (NUNCA al repo)
-cp app/.env.example app/.env
-$EDITOR app/.env                                 # GBM_EMAIL y GBM_PASSWORD
-
-# Smart update — descarga datos, procesa, arranca server, abre browser
+git clone https://github.com/cdamken/gbm-dashboard.git
+cd gbm-dashboard
 ./dashboard.sh
 ```
 
-La primera vez te pedirá el **código TOTP** de tu app autenticadora.
-La sesión se guarda en `~/.gbm-mx/session.json` y dura ~1h — los siguientes
-runs no piden TOTP de nuevo hasta que expire.
+Eso es todo. La primera vez:
+
+1. El script instala `gbm-mx-api` automáticamente en un venv local.
+2. Abre el browser en `http://localhost:8086/app/index.html`.
+3. **Aparece automáticamente un modal de configuración** pidiendo tu email
+   y contraseña de GBM+. No necesitas editar archivos a mano.
+4. Tras guardar, te pide el **código TOTP** de tu app autenticadora.
+5. Descarga tus datos y muestra el dashboard.
+
+La sesión se guarda en `~/.gbm-mx/session.json` (permisos `0600`) y dura
+~1h — los siguientes runs no piden TOTP de nuevo hasta que expire.
+
+Si quieres cambiar las credenciales después, el botón **⚙ Cuenta** en el
+header reabre el modal de configuración.
 
 ### Comandos
 
