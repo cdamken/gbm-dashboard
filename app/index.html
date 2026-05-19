@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GBM Portfolio Dashboard</title>
+<style>
+:root {
+  --bg: #0f1419;
+  --card: #1a1f2e;
+  --border: #2a3142;
+  --text: #e8eef5;
+  --muted: #7a8599;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+  --purple: #c084fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5;
+}
+
+h1 {
+  font-size: 28px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 12px; font-weight: 700;
+}
+.logo-box {
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  width: 44px; height: 44px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: white;
+}
+
+.subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+.subtitle .update-btn {
+  margin-left: 12px;
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--blue); padding: 4px 12px; border-radius: 6px;
+  cursor: pointer; font-size: 12px;
+}
+.subtitle .update-btn:hover { background: rgba(96, 165, 250, 0.1); }
+.subtitle .update-btn:disabled { opacity: 0.5; cursor: wait; }
+
+.cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px; margin-bottom: 32px;
+}
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px;
+}
+.card .label {
+  color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: 8px;
+}
+.card .value { font-size: 26px; font-weight: 700; }
+.card .delta { font-size: 13px; margin-top: 6px; }
+
+.green { color: var(--green); }
+.red { color: var(--red); }
+.amber { color: var(--amber); }
+.blue { color: var(--blue); }
+.purple { color: var(--purple); }
+.muted { color: var(--muted); }
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+
+/* ----- account chips ----- */
+.accounts-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px; margin-bottom: 32px;
+}
+.account-chip {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px;
+  position: relative;
+}
+.account-chip .acc-type {
+  font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.7px; margin-bottom: 4px; font-weight: 600;
+}
+.account-chip .acc-name { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.account-chip .acc-id {
+  font-size: 11px; color: var(--muted); font-family: monospace;
+  margin-bottom: 12px;
+}
+.account-chip .acc-value { font-size: 20px; font-weight: 700; }
+.account-chip .acc-pnl { font-size: 12px; margin-top: 4px; }
+.account-chip .acc-detail-flag {
+  position: absolute; top: 12px; right: 12px;
+  font-size: 9px; padding: 2px 6px; border-radius: 8px;
+  background: rgba(96, 165, 250, 0.15); color: var(--blue);
+  font-weight: 600; letter-spacing: 0.3px;
+}
+.account-chip .acc-detail-flag.no { background: rgba(122, 133, 153, 0.15); color: var(--muted); }
+
+/* ----- section headers ----- */
+.section {
+  margin: 40px 0 16px; font-size: 18px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+.badge {
+  background: var(--border); color: var(--muted); font-size: 12px;
+  padding: 3px 10px; border-radius: 12px; font-weight: 500;
+}
+
+/* ----- top movers (two-column grid) ----- */
+.movers-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+@media (max-width: 720px) { .movers-grid { grid-template-columns: 1fr; } }
+
+/* ----- controls ----- */
+.controls {
+  display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.controls input, .controls select {
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px;
+}
+.controls input { min-width: 250px; }
+
+/* ----- tables ----- */
+table {
+  width: 100%; border-collapse: collapse; background: var(--card);
+  border-radius: 12px; overflow: hidden; margin-bottom: 12px; table-layout: auto;
+}
+th, td {
+  text-align: left; padding: 12px 14px; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  background: rgba(255,255,255,0.03); color: var(--muted);
+  font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap;
+}
+th:hover { color: var(--text); }
+tr:hover { background: rgba(255,255,255,0.02); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ticker { font-family: monospace; font-weight: 600; }
+
+.market-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 600;
+}
+.market-bmv { background: rgba(96, 165, 250, 0.15); color: var(--blue); }
+.market-sic { background: rgba(192, 132, 252, 0.15); color: var(--purple); }
+.market-deuda { background: rgba(251, 191, 36, 0.15); color: var(--amber); }
+.market-comun { background: rgba(251, 191, 36, 0.10); color: var(--amber); }
+.market-extranjero { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.market-efectivo { background: rgba(122, 133, 153, 0.15); color: var(--muted); }
+
+.warning {
+  background: rgba(251, 191, 36, 0.1); border-left: 4px solid var(--amber);
+  padding: 14px 18px; border-radius: 8px; margin: 16px 0; font-size: 13px;
+  color: var(--text);
+}
+.warning b { color: var(--amber); }
+.error {
+  background: rgba(248, 113, 113, 0.1); border-left: 4px solid var(--red);
+  padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px;
+}
+
+.disclaimer {
+  margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; line-height: 1.6;
+}
+.disclaimer a { color: var(--blue); text-decoration: none; }
+.disclaimer a:hover { text-decoration: underline; }
+
+/* ----- modal ----- */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+  display: none; align-items: center; justify-content: center;
+  z-index: 100; backdrop-filter: blur(4px);
+}
+.modal-backdrop.show { display: flex; }
+.modal {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 28px; max-width: 420px; width: 90%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.modal h2 { font-size: 18px; margin-bottom: 8px; }
+.modal p { color: var(--muted); font-size: 13px; margin-bottom: 20px; line-height: 1.5; }
+.modal input.totp {
+  width: 100%; background: var(--bg); border: 2px solid var(--border);
+  color: var(--text); padding: 14px; border-radius: 8px;
+  font-size: 24px; font-family: monospace; text-align: center;
+  letter-spacing: 8px; margin-bottom: 16px;
+}
+.modal input.totp:focus { outline: none; border-color: var(--blue); }
+.modal .modal-btns { display: flex; gap: 12px; justify-content: flex-end; }
+.modal button {
+  padding: 10px 20px; border-radius: 8px; border: none;
+  font-size: 14px; cursor: pointer; font-weight: 600;
+}
+.modal button.primary { background: var(--blue); color: var(--bg); }
+.modal button.primary:hover { background: #93c5fd; }
+.modal button.primary:disabled { opacity: 0.5; cursor: wait; }
+.modal button.secondary {
+  background: transparent; color: var(--muted); border: 1px solid var(--border);
+}
+.modal button.secondary:hover { color: var(--text); }
+.modal .modal-error {
+  background: rgba(248, 113, 113, 0.1); border-left: 3px solid var(--red);
+  padding: 10px 14px; border-radius: 6px; font-size: 13px;
+  margin-bottom: 16px; color: var(--red);
+}
+.modal .modal-error.hidden { display: none; }
+.modal .modal-hint {
+  font-size: 11px; color: var(--muted); margin-top: 12px; text-align: center;
+}
+</style>
+</head>
+<body>
+
+<h1>
+  <div class="logo-box">GBM</div>
+  Portfolio Dashboard
+</h1>
+<div class="subtitle">
+  <span id="contract-label">Contrato: cargando...</span> · Última actualización:
+  <span id="last-update">—</span>
+  <button class="update-btn" id="update-btn" onclick="triggerUpdate()">⟳ Update</button>
+</div>
+
+<div id="error-box"></div>
+
+<!-- ---------- top cards ---------- -->
+<div class="cards" id="cards">
+  <div class="card">
+    <div class="label">Valor total</div>
+    <div class="value" id="total-value">—</div>
+    <div class="delta muted">suma de todas las cuentas</div>
+  </div>
+  <div class="card">
+    <div class="label">P&L acumulado</div>
+    <div class="value" id="total-pnl">—</div>
+    <div class="delta" id="total-pnl-pct">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Posiciones</div>
+    <div class="value" id="num-positions">—</div>
+    <div class="delta muted">todas las cuentas</div>
+  </div>
+  <div class="card">
+    <div class="label">Cuentas activas</div>
+    <div class="value" id="num-accounts">—</div>
+    <div class="delta muted">estrategias del contrato</div>
+  </div>
+</div>
+
+<!-- ---------- accounts ---------- -->
+<div class="section">
+  <span>Cuentas</span>
+  <span class="badge" id="accounts-count">—</span>
+</div>
+<div class="accounts-grid" id="accounts-grid"></div>
+
+<!-- ---------- top movers ---------- -->
+<div class="section">
+  <span>Top movimientos</span>
+  <span class="badge muted">todas las cuentas</span>
+</div>
+<div class="movers-grid">
+  <div>
+    <h3 style="font-size:13px; color: var(--green); margin-bottom: 8px;">▲ Top ganadores</h3>
+    <table>
+      <thead><tr><th>Emisora</th><th class="num">Cantidad</th><th class="num">P&L %</th><th class="num">P&L MXN</th></tr></thead>
+      <tbody id="top-winners"></tbody>
+    </table>
+  </div>
+  <div>
+    <h3 style="font-size:13px; color: var(--red); margin-bottom: 8px;">▼ Top perdedores</h3>
+    <table>
+      <thead><tr><th>Emisora</th><th class="num">Cantidad</th><th class="num">P&L %</th><th class="num">P&L MXN</th></tr></thead>
+      <tbody id="top-losers"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ---------- positions table ---------- -->
+<div class="section">
+  <span>Todas las posiciones</span>
+  <span class="badge" id="positions-count">—</span>
+</div>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="Buscar emisora..." oninput="renderTable()">
+  <select id="account-filter" onchange="renderTable()">
+    <option value="">Todas las cuentas</option>
+  </select>
+  <select id="market-filter" onchange="renderTable()">
+    <option value="">Todos los mercados</option>
+    <option value="mercado_capitales">BMV (México)</option>
+    <option value="mercados_globales_sic">SIC (USA vía BMV)</option>
+    <option value="mercado_extranjero">Extranjero (Trading USA)</option>
+    <option value="sociedades_inversion_comun">Fondos Común</option>
+    <option value="sociedades_inversion_deuda">Fondos Deuda</option>
+  </select>
+  <select id="pnl-filter" onchange="renderTable()">
+    <option value="">P&L: todos</option>
+    <option value="winners">Solo ganadores (+)</option>
+    <option value="losers">Solo perdedores (−)</option>
+  </select>
+</div>
+
+<table id="positions-table">
+  <thead>
+    <tr>
+      <th onclick="setSort('issue_id')">Emisora</th>
+      <th>Mercado</th>
+      <th onclick="setSort('_account_name')">Cuenta</th>
+      <th class="num" onclick="setSort('quantity')">Cantidad</th>
+      <th class="num" onclick="setSort('average_price')">Precio promedio</th>
+      <th class="num" onclick="setSort('last_price')">Último precio</th>
+      <th class="num" onclick="setSort('market_value')">Valor mercado</th>
+      <th class="num" onclick="setSort('yield_value')">P&L MXN</th>
+      <th class="num" onclick="setSort('historical_variation_percentage')">P&L %</th>
+    </tr>
+  </thead>
+  <tbody id="positions-tbody"></tbody>
+</table>
+
+<div class="disclaimer">
+  Dashboard no oficial — datos vía
+  <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
+  Todo corre en localhost; nada de tus datos sale de tu máquina.
+  No afiliado con Grupo Bursátil Mexicano.
+</div>
+
+<!-- ------------- TOTP modal ------------- -->
+<div class="modal-backdrop" id="totp-modal" onclick="closeModalIfBackdrop(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>🔐 Código de seguridad</h2>
+    <p>
+      Tu sesión expiró. Abre tu app autenticadora (Google Authenticator /
+      Authy / la que uses) y teclea el código de <b>6 dígitos</b> para GBM+.
+    </p>
+    <div class="modal-error hidden" id="totp-error"></div>
+    <input
+      type="text"
+      class="totp"
+      id="totp-input"
+      maxlength="6"
+      inputmode="numeric"
+      autocomplete="off"
+      placeholder="000000"
+      oninput="onTotpInput(event)"
+      onkeydown="if (event.key === 'Enter') submitTotp()"
+    >
+    <div class="modal-btns">
+      <button class="secondary" onclick="closeModal()">Cancelar</button>
+      <button class="primary" id="totp-submit" onclick="submitTotp()">Actualizar</button>
+    </div>
+    <div class="modal-hint">
+      El código cambia cada 30 segundos. Sin guardar en disco.
+    </div>
+  </div>
+</div>
+
+<script>
+// ----------------------------------------------------------------------
+// Format helpers
+// ----------------------------------------------------------------------
+const fmtMoney = (n, opts = {}) => {
+  if (n == null || isNaN(n)) return "—";
+  const { sign = false, decimals = 2 } = opts;
+  const prefix = sign && n > 0 ? "+" : "";
+  return prefix + n.toLocaleString("es-MX", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+};
+const fmtPct = (n) => {
+  if (n == null || isNaN(n)) return "—";
+  return (n >= 0 ? "+" : "") + (n * 100).toFixed(2) + "%";
+};
+const pnlClass = (n) => (n > 0 ? "pos" : n < 0 ? "neg" : "muted");
+const formatTimestamp = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString("es-MX", {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+};
+
+const ACCOUNT_TYPES = {
+  "trading":     { label: "Trading MX",  color: "blue" },
+  "trading_usa": { label: "Trading USA", color: "purple" },
+  "smart_cash":  { label: "Smart Cash",  color: "amber" },
+};
+const MARKETS = {
+  "mercados_globales_sic":       { label: "SIC",       cls: "market-sic" },
+  "mercado_capitales":           { label: "BMV",       cls: "market-bmv" },
+  "sociedades_inversion_deuda":  { label: "F. Deuda",  cls: "market-deuda" },
+  "sociedades_inversion_comun":  { label: "F. Común",  cls: "market-comun" },
+  "mercado_extranjero":          { label: "Extranjero",cls: "market-extranjero" },
+  "efectivo":                    { label: "Efectivo",  cls: "market-efectivo" },
+};
+const INVEST_SECTIONS = [
+  "mercados_globales_sic",
+  "mercado_capitales",
+  "sociedades_inversion_deuda",
+  "sociedades_inversion_comun",
+  "mercado_extranjero",
+];
+
+// ----------------------------------------------------------------------
+// State
+// ----------------------------------------------------------------------
+let state = {
+  accounts: [],
+  positionsByAccount: {},   // { "EP47NC05": {...} | null }
+  positionsFlat: [],        // every position across every account
+  lastUpdate: null,
+  sortKey: "market_value",
+  sortDir: "desc",
+};
+
+// ----------------------------------------------------------------------
+// Loader
+// ----------------------------------------------------------------------
+async function load() {
+  try {
+    const [accounts, positionsByAccount, lastUpdate] = await Promise.all([
+      fetch("/DATA/accounts.json").then(r => r.json()),
+      fetch("/DATA/positions.json").then(r => r.json()).catch(() => ({})),
+      fetch("/DATA/last_update.date").then(r => r.text()).catch(() => ""),
+    ]);
+    state.accounts = accounts;
+    state.positionsByAccount = positionsByAccount;
+    state.lastUpdate = lastUpdate.trim();
+
+    // Flatten positions across ALL accounts. Each position carries the
+    // _account_legacy_id so the UI can show which account it belongs to.
+    state.positionsFlat = [];
+    for (const a of accounts) {
+      const flat = flattenPositions(positionsByAccount[a.legacy_contract_id], a);
+      state.positionsFlat.push(...flat);
+    }
+
+    renderAll();
+  } catch (err) {
+    document.getElementById("error-box").innerHTML =
+      `<div class="error"><b>No se pudieron cargar los datos.</b><br>
+       Corre <code>./dashboard.sh</code> para descargar y procesar.<br>
+       Detalle: ${err.message}</div>`;
+  }
+}
+
+function flattenPositions(posData, account) {
+  if (!posData) return [];
+  const all = [];
+  for (const key of INVEST_SECTIONS) {
+    const section = posData[key] || [];
+    for (const p of section) {
+      if (p.issue_id === "Subtotal") continue;
+      all.push({
+        ...p,
+        _market_key: key,
+        _account_legacy_id: account?.legacy_contract_id || null,
+        _account_name: account?.name || null,
+      });
+    }
+  }
+  return all;
+}
+
+// ----------------------------------------------------------------------
+// Aggregates computed live from accounts + positions
+// ----------------------------------------------------------------------
+function aggregates() {
+  const totalValue = state.accounts.reduce(
+    (s, a) => s + (a.position?.amount || 0), 0
+  );
+  const totalPnL = state.accounts.reduce(
+    (s, a) => s + (a.plus_minus?.amount || 0), 0
+  );
+  const principal = totalValue - totalPnL;
+  const totalPnLPct = principal !== 0 ? totalPnL / principal : 0;
+  const numPositions = state.positionsFlat.length;
+  return { totalValue, totalPnL, totalPnLPct, numPositions };
+}
+
+// ----------------------------------------------------------------------
+// Renderers
+// ----------------------------------------------------------------------
+function renderAll() {
+  renderHeader();
+  renderCards();
+  renderAccounts();
+  populateAccountFilter();
+  renderTopMovers();
+  renderTable();
+}
+
+function populateAccountFilter() {
+  const sel = document.getElementById("account-filter");
+  // Keep the first "Todas" option, append one per account that has positions.
+  while (sel.children.length > 1) sel.removeChild(sel.lastChild);
+  for (const a of state.accounts) {
+    const hasPositions = state.positionsFlat.some(
+      p => p._account_legacy_id === a.legacy_contract_id
+    );
+    if (!hasPositions) continue;
+    const opt = document.createElement("option");
+    opt.value = a.legacy_contract_id;
+    opt.textContent = `${a.name || a.legacy_contract_id} (${a.legacy_contract_id})`;
+    sel.appendChild(opt);
+  }
+}
+
+function renderHeader() {
+  // Pick the "general" legacy_contract_id (without account suffix) — the
+  // shortest one in the accounts list. Just for display.
+  const root = state.accounts
+    .map(a => a.legacy_contract_id)
+    .reduce((acc, id) => (acc && acc.length < id.length ? acc : id), null);
+  // Strip the trailing 2 digits to get the contract code.
+  const contractCode = root ? root.slice(0, -2) : "?";
+  document.getElementById("contract-label").textContent = "Contrato: " + contractCode;
+  document.getElementById("last-update").textContent = formatTimestamp(state.lastUpdate);
+}
+
+function renderCards() {
+  const { totalValue, totalPnL, totalPnLPct, numPositions } = aggregates();
+  document.getElementById("total-value").textContent = "$" + fmtMoney(totalValue);
+
+  const pnlEl = document.getElementById("total-pnl");
+  pnlEl.textContent = "$" + fmtMoney(totalPnL, { sign: true });
+  pnlEl.className = "value " + pnlClass(totalPnL);
+
+  const pctEl = document.getElementById("total-pnl-pct");
+  pctEl.textContent = fmtPct(totalPnLPct);
+  pctEl.className = "delta " + pnlClass(totalPnL);
+
+  document.getElementById("num-positions").textContent = numPositions;
+  document.getElementById("num-accounts").textContent = state.accounts.length;
+}
+
+function renderAccounts() {
+  const grid = document.getElementById("accounts-grid");
+  document.getElementById("accounts-count").textContent = state.accounts.length;
+  grid.innerHTML = state.accounts.map(a => {
+    const type = ACCOUNT_TYPES[a.management_type_template]
+      || { label: a.management_type_template, color: "muted" };
+    const value = a.position?.amount;
+    const pnl = a.plus_minus?.amount;
+    const pnlPct = a.plus_minus_percentage;
+    const posCount = state.positionsFlat.filter(
+      p => p._account_legacy_id === a.legacy_contract_id
+    ).length;
+    return `<div class="account-chip">
+      ${posCount > 0 ? `<span class="acc-detail-flag">${posCount} pos.</span>` : ''}
+      <div class="acc-type ${type.color}">${type.label}</div>
+      <div class="acc-name">${a.name || "—"}</div>
+      <div class="acc-id">${a.legacy_contract_id}</div>
+      <div class="acc-value">$${fmtMoney(value)}</div>
+      <div class="acc-pnl ${pnlClass(pnl)}">
+        ${pnl != null ? "$" + fmtMoney(pnl, { sign: true }) : "—"}
+        ${pnlPct != null ? ` (${fmtPct(pnlPct)})` : ""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderTopMovers() {
+  // Equity-like sections (excludes cash). Includes BMV, SIC, USA fractional.
+  const equity = state.positionsFlat.filter(
+    p => p._market_key === "mercados_globales_sic"
+      || p._market_key === "mercado_capitales"
+      || p._market_key === "mercado_extranjero"
+  );
+  const sorted = [...equity].sort(
+    (a, b) => (b.historical_variation_percentage ?? -Infinity)
+            - (a.historical_variation_percentage ?? -Infinity)
+  );
+  const winners = sorted.slice(0, 5);
+  const losers = sorted.slice(-5).reverse();
+  document.getElementById("top-winners").innerHTML =
+    winners.map(positionMoverRow).join("") || emptyRow();
+  document.getElementById("top-losers").innerHTML =
+    losers.map(positionMoverRow).join("") || emptyRow();
+}
+
+function emptyRow() {
+  return '<tr><td colspan="4" style="color: var(--muted); text-align: center;">Sin datos</td></tr>';
+}
+
+function positionMoverRow(p) {
+  const pct = p.historical_variation_percentage;
+  return `<tr>
+    <td class="ticker">${p.issue_id}</td>
+    <td class="num">${fmtMoney(p.quantity, { decimals: 0 })}</td>
+    <td class="num ${pnlClass(pct)}">${fmtPct(pct)}</td>
+    <td class="num ${pnlClass(p.yield_value)}">${fmtMoney(p.yield_value, { sign: true })}</td>
+  </tr>`;
+}
+
+function setSort(key) {
+  if (state.sortKey === key) {
+    state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+  } else {
+    state.sortKey = key;
+    state.sortDir = "desc";
+  }
+  renderTable();
+}
+
+function renderTable() {
+  const search = document.getElementById("search").value.toLowerCase();
+  const accountFilter = document.getElementById("account-filter").value;
+  const marketFilter = document.getElementById("market-filter").value;
+  const pnlFilter = document.getElementById("pnl-filter").value;
+
+  let rows = state.positionsFlat.filter(p => {
+    if (search && !p.issue_id.toLowerCase().includes(search)
+        && !(p.issue_name || "").toLowerCase().includes(search)) return false;
+    if (accountFilter && p._account_legacy_id !== accountFilter) return false;
+    if (marketFilter && p._market_key !== marketFilter) return false;
+    if (pnlFilter === "winners" && !(p.yield_value > 0)) return false;
+    if (pnlFilter === "losers" && !(p.yield_value < 0)) return false;
+    return true;
+  });
+
+  rows.sort((a, b) => {
+    const va = a[state.sortKey] ?? 0;
+    const vb = b[state.sortKey] ?? 0;
+    if (typeof va === "string") {
+      return state.sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+    return state.sortDir === "asc" ? va - vb : vb - va;
+  });
+
+  document.getElementById("positions-count").textContent =
+    `${rows.length} / ${state.positionsFlat.length}`;
+  document.getElementById("positions-tbody").innerHTML = rows.map(p => {
+    const m = MARKETS[p._market_key] || { label: "?", cls: "" };
+    // Some sections (mercado_extranjero) report fractional quantities;
+    // others (BMV / SIC) are integers. Show up to 4 decimals only when needed.
+    const qtyDecimals = (p.quantity % 1 === 0) ? 0 : 4;
+    return `<tr>
+      <td class="ticker">${p.issue_id}
+        <div style="color: var(--muted); font-size: 11px; font-weight: 400;">
+          ${p.issue_name || ""}
+        </div>
+      </td>
+      <td><span class="market-pill ${m.cls}">${m.label}</span></td>
+      <td style="color: var(--muted); font-size: 12px;">${p._account_name || "—"}</td>
+      <td class="num">${fmtMoney(p.quantity, { decimals: qtyDecimals })}</td>
+      <td class="num">${fmtMoney(p.average_price)}</td>
+      <td class="num">${fmtMoney(p.last_price)}</td>
+      <td class="num">${fmtMoney(p.market_value)}</td>
+      <td class="num ${pnlClass(p.yield_value)}">
+        ${fmtMoney(p.yield_value, { sign: true })}
+      </td>
+      <td class="num ${pnlClass(p.historical_variation_percentage)}">
+        ${fmtPct(p.historical_variation_percentage)}
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+// ----------------------------------------------------------------------
+// Update + TOTP modal
+// ----------------------------------------------------------------------
+async function triggerUpdate(totpCode = null) {
+  const btn = document.getElementById("update-btn");
+  btn.disabled = true;
+  btn.textContent = totpCode ? "⟳ Verificando código..." : "⟳ Actualizando...";
+
+  let res;
+  try {
+    res = await fetch("/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(totpCode ? { totp_code: totpCode } : {}),
+    });
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "⟳ Update";
+    alert("No se pudo conectar al server.\nDetalle: " + err.message);
+    return;
+  }
+
+  let payload = {};
+  try { payload = await res.json(); } catch (_) {}
+
+  if (res.ok && payload.status === "ok") {
+    closeModal();
+    location.reload();
+    return;
+  }
+
+  // Handle the documented error statuses from the server.
+  btn.disabled = false;
+  btn.textContent = "⟳ Update";
+
+  if (payload.status === "mfa_required") {
+    openModal();
+    return;
+  }
+  if (payload.status === "mfa_invalid") {
+    openModal("Código incorrecto o ya expiró. Genera uno nuevo en tu app.");
+    return;
+  }
+  if (payload.status === "auth_failed") {
+    closeModal();
+    alert(
+      "Las credenciales en app/.env son incorrectas o GBM las rechazó.\n"
+      + "Edita app/.env y reintenta."
+    );
+    return;
+  }
+  if (payload.status === "config_error") {
+    closeModal();
+    alert(
+      "Falta configuración: app/.env no existe o no tiene GBM_EMAIL/GBM_PASSWORD."
+    );
+    return;
+  }
+  if (payload.status === "api_error" || payload.status === "timeout") {
+    closeModal();
+    alert("La API de GBM falló: " + (payload.detail || "sin detalle"));
+    return;
+  }
+  closeModal();
+  alert("Update falló (HTTP " + res.status + "): " + (payload.detail || "sin detalle"));
+}
+
+function openModal(errorMsg = null) {
+  const modal = document.getElementById("totp-modal");
+  const errEl = document.getElementById("totp-error");
+  const input = document.getElementById("totp-input");
+  if (errorMsg) {
+    errEl.textContent = errorMsg;
+    errEl.classList.remove("hidden");
+  } else {
+    errEl.classList.add("hidden");
+  }
+  input.value = "";
+  document.getElementById("totp-submit").disabled = true;
+  modal.classList.add("show");
+  setTimeout(() => input.focus(), 100);
+}
+
+function closeModal() {
+  document.getElementById("totp-modal").classList.remove("show");
+}
+
+function closeModalIfBackdrop(e) {
+  if (e.target.id === "totp-modal") closeModal();
+}
+
+function onTotpInput(e) {
+  // Strip non-digits, cap at 6.
+  const cleaned = e.target.value.replace(/\D/g, "").slice(0, 6);
+  e.target.value = cleaned;
+  document.getElementById("totp-submit").disabled = cleaned.length !== 6;
+}
+
+function submitTotp() {
+  const code = document.getElementById("totp-input").value.trim();
+  if (!(code.length === 6 && /^\d+$/.test(code))) return;
+  document.getElementById("totp-submit").disabled = true;
+  triggerUpdate(code);
+}
+
+// Close modal with Escape.
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeModal();
+});
+
+load();
+</script>
+</body>
+</html>
