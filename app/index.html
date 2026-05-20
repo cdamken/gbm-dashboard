@@ -429,12 +429,16 @@ tr:hover { background: rgba(255,255,255,0.02); }
 // ----------------------------------------------------------------------
 const fmtMoney = (n, opts = {}) => {
   if (n == null || isNaN(n)) return "—";
-  const { sign = false, decimals = 2 } = opts;
-  const prefix = sign && n > 0 ? "+" : "";
-  return prefix + n.toLocaleString("es-MX", {
+  const { sign = false, decimals = 2, currency = false } = opts;
+  const abs = Math.abs(n);
+  const formatted = abs.toLocaleString("es-MX", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
+  // Order: sign first, then $, then number. Renders as "+$2,496.49" / "-$1.50".
+  const signPrefix = n < 0 ? "-" : (sign && n > 0 ? "+" : "");
+  const currencyPrefix = currency ? "$" : "";
+  return signPrefix + currencyPrefix + formatted;
 };
 const fmtPct = (n) => {
   if (n == null || isNaN(n)) return "—";
@@ -591,10 +595,10 @@ function renderHeader() {
 
 function renderCards() {
   const { totalValue, totalPnL, totalPnLPct, numPositions } = aggregates();
-  document.getElementById("total-value").textContent = "$" + fmtMoney(totalValue);
+  document.getElementById("total-value").textContent = fmtMoney(totalValue, { currency: true });
 
   const pnlEl = document.getElementById("total-pnl");
-  pnlEl.textContent = "$" + fmtMoney(totalPnL, { sign: true });
+  pnlEl.textContent = fmtMoney(totalPnL, { sign: true, currency: true });
   pnlEl.className = "value " + pnlClass(totalPnL);
 
   const pctEl = document.getElementById("total-pnl-pct");
@@ -622,9 +626,9 @@ function renderAccounts() {
       <div class="acc-type ${type.color}">${type.label}</div>
       <div class="acc-name">${a.name || "—"}</div>
       <div class="acc-id">${a.legacy_contract_id}</div>
-      <div class="acc-value">$${fmtMoney(value)}</div>
+      <div class="acc-value">${fmtMoney(value, { currency: true })}</div>
       <div class="acc-pnl ${pnlClass(pnl)}">
-        ${pnl != null ? "$" + fmtMoney(pnl, { sign: true }) : "—"}
+        ${pnl != null ? fmtMoney(pnl, { sign: true, currency: true }) : "—"}
         ${pnlPct != null ? ` (${fmtPct(pnlPct)})` : ""}
       </div>
     </div>`;
