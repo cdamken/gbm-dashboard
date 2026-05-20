@@ -597,7 +597,9 @@ function aggregates() {
   );
   const principal = totalValue - totalPnL;
   const totalPnLPct = principal !== 0 ? totalPnL / principal : 0;
-  const numPositions = state.positionsFlat.length;
+  // Count UNIQUE tickers across all accounts (a ticker held in 3 accounts
+  // counts as 1 position, not 3).
+  const numPositions = new Set(state.positionsFlat.map(p => p.issue_id)).size;
   return { totalValue, totalPnL, totalPnLPct, numPositions };
 }
 
@@ -770,11 +772,59 @@ function renderTable() {
   const marketFilter = document.getElementById("market-filter").value;
   const pnlFilter = document.getElementById("pnl-filter").value;
 
-  let rows = state.positionsFlat.filter(p => {
+  // 1. Filter individual position-account entries first.
+  const filtered = state.positionsFlat.filter(p => {
     if (search && !p.issue_id.toLowerCase().includes(search)
         && !(p.issue_name || "").toLowerCase().includes(search)) return false;
     if (accountFilter && p._account_legacy_id !== accountFilter) return false;
     if (marketFilter && p._market_key !== marketFilter) return false;
+    // P&L filter must be checked AFTER aggregation, not here, otherwise a
+    // ticker held in two accounts where one slice is +$10 and the other is
+    // -$3 would be partially dropped. We filter on the aggregated yield.
+    return true;
+  });
+
+  // 2. Aggregate by issue_id so a ticker held in N accounts shows ONCE.
+  const byIssue = {};
+  for (const p of filtered) {
+    const k = p.issue_id;
+    if (!byIssue[k]) {
+      byIssue[k] = {
+        issue_id: k,
+        issue_name: p.issue_name,
+        _market_key: p._market_key,
+        quantity: 0,
+        market_value: 0,
+        yield_value: 0,
+        average_cost: 0,
+        accounts: new Set(),
+      };
+    }
+    const agg = byIssue[k];
+    agg.quantity += Number(p.quantity) || 0;
+    agg.market_value += Number(p.market_value) || 0;
+    agg.yield_value += Number(p.yield_value) || 0;
+    agg.average_cost += Number(p.average_cost) || 0;
+    if (p._account_name) agg.accounts.add(p._account_name);
+  }
+
+  // 3. Recompute derived metrics from totals.
+  const totalPortfolioValue = state.positionsFlat.reduce(
+    (s, p) => s + (Number(p.market_value) || 0), 0
+  );
+  for (const agg of Object.values(byIssue)) {
+    agg.average_price = agg.quantity > 0 ? agg.average_cost / agg.quantity : 0;
+    agg.last_price = agg.quantity > 0 ? agg.market_value / agg.quantity : 0;
+    agg.historical_variation_percentage =
+      agg.average_cost > 0 ? agg.yield_value / agg.average_cost : 0;
+    agg.position_percentage =
+      totalPortfolioValue > 0 ? agg.market_value / totalPortfolioValue : 0;
+    agg._account_list = [...agg.accounts].sort().join(", ");
+    agg._account_count = agg.accounts.size;
+  }
+
+  // 4. Apply the P&L filter on aggregated values.
+  let rows = Object.values(byIssue).filter(p => {
     if (pnlFilter === "winners" && !(p.yield_value > 0)) return false;
     if (pnlFilter === "losers" && !(p.yield_value < 0)) return false;
     return true;
@@ -789,13 +839,22 @@ function renderTable() {
     return state.sortDir === "asc" ? va - vb : vb - va;
   });
 
+  // Count of unique tickers (after aggregation) vs total across all accounts.
+  const totalUniqueTickers = new Set(state.positionsFlat.map(p => p.issue_id)).size;
   document.getElementById("positions-count").textContent =
-    `${rows.length} / ${state.positionsFlat.length}`;
+    `${rows.length} / ${totalUniqueTickers} tickers`;
+
   document.getElementById("positions-tbody").innerHTML = rows.map(p => {
     const m = MARKETS[p._market_key] || { label: "?", cls: "" };
     // Some sections (mercado_extranjero) report fractional quantities;
     // others (BMV / SIC) are integers. Show up to 4 decimals only when needed.
     const qtyDecimals = (p.quantity % 1 === 0) ? 0 : 4;
+    // Account column: name if held in one account, "N cuentas" with detail
+    // tooltip if held in several.
+    const accountCell = p._account_count > 1
+      ? `<span title="${p._account_list}">${p._account_count} cuentas</span>
+         <div style="color: var(--muted); font-size: 10px;">${p._account_list}</div>`
+      : (p._account_list || "—");
     return `<tr>
       <td class="ticker">${p.issue_id}
         <div style="color: var(--muted); font-size: 11px; font-weight: 400;">
@@ -803,7 +862,7 @@ function renderTable() {
         </div>
       </td>
       <td><span class="market-pill ${m.cls}">${m.label}</span></td>
-      <td style="color: var(--muted); font-size: 12px;">${p._account_name || "—"}</td>
+      <td style="color: var(--muted); font-size: 12px;">${accountCell}</td>
       <td class="num">${fmtMoney(p.quantity, { decimals: qtyDecimals })}</td>
       <td class="num">${fmtMoney(p.average_price)}</td>
       <td class="num">${fmtMoney(p.last_price)}</td>
