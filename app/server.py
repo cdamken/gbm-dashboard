@@ -106,6 +106,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if any(p in path for p in ("/update", "/config")) or "code" in format:
             super().log_message(format, *args)
 
+    def end_headers(self):
+        # Force the browser to revalidate every request. Without this, a stale
+        # cached HTML/JSON makes the dashboard show old timestamps even after
+        # the user clicks Update and the server actually refetched.
+        path = getattr(self, "path", "")
+        if path.startswith("/app/") or path.startswith("/DATA/"):
+            self.send_header("Cache-Control", "no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+        super().end_headers()
+
     # ------------------------------------------------------------------
     # GET
     # ------------------------------------------------------------------
