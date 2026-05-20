@@ -235,51 +235,74 @@ def main() -> None:
             write_json(DATA_DIR / "positions.json", positions_by_account)
 
             # ----------------------------------------------------------
-            # Orders (filled) for the trading account — historical movements.
-            # Defaults to the last 90 days; override with GBM_ORDERS_DAYS.
+            # Orders (filled) for EVERY trading account (BMV). A user may
+            # have multiple trading accounts (e.g. Personal, Asesor, family
+            # members under the same login) and orders live in different
+            # places. We iterate them all and tag each order with its
+            # account so the dashboard can filter / group.
             # ----------------------------------------------------------
-            trading_account = next(
-                (a for a in accounts if a.management_type_template == "trading"),
-                None,
-            )
-            if trading_account:
+            trading_accounts = [
+                a for a in accounts if a.management_type_template == "trading"
+            ]
+            if trading_accounts:
                 days_back = int(os.environ.get("GBM_ORDERS_DAYS", "90"))
                 to_date_ = date.today()
                 from_date_ = to_date_ - timedelta(days=days_back)
                 print(
                     f"  fetching orders {from_date_} → {to_date_} "
-                    f"({days_back} days; this takes ~{days_back // 2}s)..."
+                    f"for {len(trading_accounts)} trading account(s)..."
                 )
-                filled = client.orders.list_filled(
-                    trading_account.legacy_contract_id, from_date_, to_date_
-                )
-                print(f"  filled orders: {len(filled)}")
+
+                all_orders: list[dict] = []
+                for acct in trading_accounts:
+                    try:
+                        filled = client.orders.list_filled(
+                            acct.legacy_contract_id, from_date_, to_date_
+                        )
+                    except ApiError as e:
+                        print(f"  {acct.name} ({acct.legacy_contract_id}): {e}")
+                        continue
+                    print(
+                        f"  {acct.name} ({acct.legacy_contract_id}): {len(filled)} orders"
+                    )
+                    for o in filled:
+                        all_orders.append(
+                            {
+                                "sob_id": o.sob_id,
+                                "account_id": o.account_id,
+                                "issue_id": o.issue_id,
+                                "instrument_type": int(o.instrument_type),
+                                "side": o.side.name,
+                                "quantity": o.quantity,
+                                "average_price": float(o.average_price),
+                                "amount": float(o.amount),
+                                "commission": float(o.commission),
+                                "iva": float(o.iva),
+                                "processed_at": o.processed_at.isoformat(),
+                                # Per-order account info (new in v0.4.3)
+                                "account_legacy_id": acct.legacy_contract_id,
+                                "account_name": acct.name,
+                            }
+                        )
+
+                # Sort chronologically (oldest first) for stable display.
+                all_orders.sort(key=lambda o: o["processed_at"])
 
                 orders_payload = {
                     "from_date": from_date_.isoformat(),
                     "to_date": to_date_.isoformat(),
-                    "account_legacy_id": trading_account.legacy_contract_id,
-                    "account_name": trading_account.name,
-                    "orders": [
+                    "accounts": [
                         {
-                            "sob_id": o.sob_id,
-                            "account_id": o.account_id,
-                            "issue_id": o.issue_id,
-                            "instrument_type": int(o.instrument_type),
-                            "side": o.side.name,
-                            "quantity": o.quantity,
-                            "average_price": float(o.average_price),
-                            "amount": float(o.amount),
-                            "commission": float(o.commission),
-                            "iva": float(o.iva),
-                            "processed_at": o.processed_at.isoformat(),
+                            "legacy_contract_id": a.legacy_contract_id,
+                            "name": a.name,
                         }
-                        for o in filled
+                        for a in trading_accounts
                     ],
+                    "orders": all_orders,
                 }
                 write_json(DATA_DIR / "orders.json", orders_payload)
             else:
-                print("  no trading account → skipping orders download.")
+                print("  no trading accounts → skipping orders download.")
 
             (DATA_DIR / "last_update.date").write_text(
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S\n"), encoding="utf-8"

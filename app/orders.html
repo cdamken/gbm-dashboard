@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>GBM Movimientos</title>
 <style>
 :root {
@@ -235,6 +238,9 @@ tr:hover { background: rgba(255,255,255,0.02); }
   <select id="ticker-filter" onchange="renderTable()">
     <option value="">Todas las emisoras</option>
   </select>
+  <span style="display: none;"><select id="account-filter" onchange="renderTable()">
+    <option value="">Todas las cuentas</option>
+  </select></span>
 </div>
 
 <table id="orders-table">
@@ -242,6 +248,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <tr>
       <th onclick="setSort('processed_at')">Fecha / Hora</th>
       <th onclick="setSort('issue_id')">Emisora</th>
+      <th onclick="setSort('account_name')">Cuenta</th>
       <th onclick="setSort('side')">Tipo</th>
       <th class="num" onclick="setSort('quantity')">Cantidad</th>
       <th class="num" onclick="setSort('average_price')">Precio</th>
@@ -254,10 +261,10 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </table>
 
 <div class="disclaimer">
-  Dashboard no oficial — datos vía
+  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.4.3</span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
-  Solo se muestran órdenes con estatus <b>Llena</b> de la cuenta principal de trading.
+  Solo se muestran órdenes con estatus <b>Llena</b> de las cuentas tipo trading.
 </div>
 
 <script>
@@ -346,13 +353,22 @@ async function load() {
     state.orders = data.orders || [];
     state.fromDate = data.from_date;
     state.toDate = data.to_date;
-    state.accountLegacy = data.account_legacy_id;
-    state.accountName = data.account_name;
+    // v0.4.3+ ships orders from multiple accounts; older payloads had a
+    // single account_legacy_id/account_name pair. Support both.
+    state.accounts = data.accounts || (
+      data.account_legacy_id
+        ? [{ legacy_contract_id: data.account_legacy_id, name: data.account_name }]
+        : []
+    );
 
     document.getElementById("range-label").textContent =
       `Rango: ${state.fromDate} → ${state.toDate}`;
-    document.getElementById("account-label").textContent =
-      `${state.accountName || "—"} (${state.accountLegacy || "—"})`;
+    const accLabel = state.accounts.length === 0
+      ? "—"
+      : state.accounts.length === 1
+        ? `${state.accounts[0].name || "—"} (${state.accounts[0].legacy_contract_id})`
+        : `${state.accounts.length} cuentas`;
+    document.getElementById("account-label").textContent = accLabel;
     document.getElementById("last-update").textContent = formatTimestamp(lastUpdate.trim());
 
     populateFilters();
@@ -381,6 +397,21 @@ function populateFilters() {
     opt.value = t;
     opt.textContent = t;
     tickerSel.appendChild(opt);
+  }
+  // Accounts present in the orders (v0.4.3+). Only add the filter if there
+  // is more than one account, otherwise it's just noise.
+  const accountsInOrders = [...new Set(state.orders.map(o => o.account_legacy_id || ""))]
+    .filter(Boolean);
+  if (accountsInOrders.length > 1) {
+    const accSel = document.getElementById("account-filter");
+    accSel.parentElement.style.display = "";  // unhide
+    for (const id of accountsInOrders) {
+      const name = state.accounts.find(a => a.legacy_contract_id === id)?.name || id;
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = `${name} (${id})`;
+      accSel.appendChild(opt);
+    }
   }
 }
 
@@ -479,12 +510,14 @@ function renderTable() {
   const sideFilter = document.getElementById("side-filter").value;
   const monthFilter = document.getElementById("month-filter").value;
   const tickerFilter = document.getElementById("ticker-filter").value;
+  const accountFilter = document.getElementById("account-filter").value;
 
   let rows = state.orders.filter(o => {
     if (search && !o.issue_id.toLowerCase().includes(search)) return false;
     if (sideFilter && o.side !== sideFilter) return false;
     if (monthFilter && monthKey(o.processed_at) !== monthFilter) return false;
     if (tickerFilter && o.issue_id !== tickerFilter) return false;
+    if (accountFilter && o.account_legacy_id !== accountFilter) return false;
     return true;
   });
 
@@ -511,6 +544,7 @@ function renderTable() {
       <td class="ticker">${o.issue_id}
         ${market ? `<span class="market-pill ${market.cls}" style="margin-left: 8px;">${market.label}</span>` : ""}
       </td>
+      <td style="color: var(--muted); font-size: 12px;">${o.account_name || "—"}</td>
       <td><span class="side-pill ${sideClass}">${sideLabel}</span></td>
       <td class="num">${fmtMoney(o.quantity, { decimals: o.quantity % 1 === 0 ? 0 : 4 })}</td>
       <td class="num">${fmtMoney(o.average_price)}</td>
@@ -518,7 +552,7 @@ function renderTable() {
       <td class="num">${fmtMoney(o.commission)}</td>
       <td class="sob-id">${o.sob_id}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="8" class="empty">Sin transacciones que coincidan con los filtros</td></tr>`;
+  }).join("") || `<tr><td colspan="9" class="empty">Sin transacciones que coincidan con los filtros</td></tr>`;
 }
 
 load();
