@@ -916,7 +916,16 @@ async function submitConfig() {
     if (res.ok && payload.status === "ok") {
       btn.textContent = "Guardar";
       closeConfigModal();
-      // After saving credentials, kick off an update (will prompt TOTP).
+      // If the account changed, wipe the in-memory state too so the user
+      // sees a clean slate while the new fetch is happening.
+      if (payload.account_changed) {
+        state.accounts = [];
+        state.positionsByAccount = {};
+        state.positionsFlat = [];
+        renderAll();
+      }
+      // Kick off an update — server will report mfa_required and the
+      // TOTP modal will appear automatically.
       triggerUpdate();
       return;
     }

@@ -96,6 +96,31 @@ def _write_env(email: str, password: str) -> None:
     tmp.replace(ENV_FILE)
 
 
+def _wipe_session_and_data() -> None:
+    """Drop the cached session token and any DATA files.
+
+    Called when the user switches to a different account in the config UI.
+    Prevents the new account from inheriting the previous account's session
+    or seeing stale holdings/orders.
+    """
+    DATA_DIR = PROJECT_DIR / "DATA"
+    session_path = Path.home() / ".gbm-mx" / "session.json"
+    try:
+        session_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    for fname in (
+        "accounts.json",
+        "positions.json",
+        "orders.json",
+        "last_update.date",
+    ):
+        try:
+            (DATA_DIR / fname).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PROJECT_DIR), **kwargs)
@@ -154,12 +179,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not password or len(password) < 4:
             self._json(400, {"status": "bad_request", "detail": "password too short"})
             return
+
+        # Detect whether the user is switching to a different GBM account.
+        # If so, we wipe the cached session and any data files so the
+        # previous account's holdings/orders don't leak into the new view,
+        # and the next update forces a fresh login (TOTP modal).
+        existing = _parse_env(ENV_FILE)
+        previous_email = existing.get("GBM_EMAIL", "").strip().lower()
+        account_changed = previous_email and previous_email != email.lower()
+
         try:
             _write_env(email, password)
         except OSError as e:
             self._json(500, {"status": "error", "detail": str(e)})
             return
-        self._json(200, {"status": "ok"})
+
+        if account_changed:
+            _wipe_session_and_data()
+
+        # Also wipe the session if the password changed — the cached token
+        # belongs to the same user, but if the user just rotated their
+        # password they probably want a fresh login to verify it works.
+        elif existing.get("GBM_PASSWORD") != password:
+            session_path = Path.home() / ".gbm-mx" / "session.json"
+            try:
+                session_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+        self._json(200, {"status": "ok", "account_changed": account_changed})
 
     def _handle_update(self):
         body = self._read_json_body()
