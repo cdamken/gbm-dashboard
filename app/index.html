@@ -690,7 +690,39 @@ function renderTopMovers() {
       || p._market_key === "mercado_capitales"
       || p._market_key === "mercado_extranjero"
   );
-  const sorted = [...equity].sort(
+
+  // Aggregate by ticker so a position held in multiple accounts (e.g.
+  // FSHOP 13 in both Personal and Asesor) shows as ONE entry with the
+  // combined totals and a recomputed P&L percentage.
+  const byIssue = {};
+  for (const p of equity) {
+    const k = p.issue_id;
+    if (!byIssue[k]) {
+      byIssue[k] = {
+        issue_id: k,
+        quantity: 0,
+        yield_value: 0,
+        market_value: 0,
+        average_cost: 0,
+        accounts: new Set(),
+      };
+    }
+    const agg = byIssue[k];
+    agg.quantity += Number(p.quantity) || 0;
+    agg.yield_value += Number(p.yield_value) || 0;
+    agg.market_value += Number(p.market_value) || 0;
+    agg.average_cost += Number(p.average_cost) || 0;
+    if (p._account_name) agg.accounts.add(p._account_name);
+  }
+  // Recompute % from aggregated totals (NOT a weighted average of the
+  // individual %s — that would be wrong if quantities differ).
+  for (const agg of Object.values(byIssue)) {
+    agg.historical_variation_percentage =
+      agg.average_cost > 0 ? agg.yield_value / agg.average_cost : 0;
+    agg.account_list = [...agg.accounts].join(", ");
+  }
+
+  const sorted = Object.values(byIssue).sort(
     (a, b) => (b.historical_variation_percentage ?? -Infinity)
             - (a.historical_variation_percentage ?? -Infinity)
   );
@@ -708,9 +740,15 @@ function emptyRow() {
 
 function positionMoverRow(p) {
   const pct = p.historical_variation_percentage;
+  // When a ticker is held in more than one account we show them as a
+  // subtitle under the ticker so it's clear the row aggregates them.
+  const subtitle = (p.account_list && p.accounts && p.accounts.size > 1)
+    ? `<div style="color: var(--muted); font-size: 10px; font-weight: 400;">${p.account_list}</div>`
+    : "";
+  const qtyDecimals = (p.quantity % 1 === 0) ? 0 : 4;
   return `<tr>
-    <td class="ticker">${p.issue_id}</td>
-    <td class="num">${fmtMoney(p.quantity, { decimals: 0 })}</td>
+    <td class="ticker">${p.issue_id}${subtitle}</td>
+    <td class="num">${fmtMoney(p.quantity, { decimals: qtyDecimals })}</td>
     <td class="num ${pnlClass(pct)}">${fmtPct(pct)}</td>
     <td class="num ${pnlClass(p.yield_value)}">${fmtMoney(p.yield_value, { sign: true })}</td>
   </tr>`;
