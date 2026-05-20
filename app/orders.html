@@ -327,9 +327,14 @@ let state = {
 async function load() {
   try {
     const opts = { cache: "no-store" };
+    const safeJson = (url) =>
+      fetch(url, opts).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const safeText = (url) =>
+      fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
+
     const [data, lastUpdate] = await Promise.all([
-      fetch("/DATA/orders.json", opts).then(r => r.ok ? r.json() : null),
-      fetch("/DATA/last_update.date", opts).then(r => r.ok ? r.text() : ""),
+      safeJson("/DATA/orders.json"),
+      safeText("/DATA/last_update.date"),
     ]);
     if (!data) {
       document.getElementById("error-box").innerHTML =

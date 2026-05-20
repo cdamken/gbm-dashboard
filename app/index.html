@@ -513,13 +513,41 @@ async function load() {
     // Cache-Control: no-store header. After Update, we re-call load()
     // (instead of location.reload) so the user never has to hard refresh.
     const opts = { cache: "no-store" };
+
+    // Each file is fetched independently so a 404 on one (e.g. first
+    // run, just after wiping data on account switch) doesn't poison
+    // the whole load. r.ok guards against HTML 404 pages being parsed
+    // as JSON.
+    const safeJson = (url) =>
+      fetch(url, opts).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const safeText = (url) =>
+      fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
+
     const [accounts, positionsByAccount, lastUpdate] = await Promise.all([
-      fetch("/DATA/accounts.json", opts).then(r => r.json()),
-      fetch("/DATA/positions.json", opts).then(r => r.json()).catch(() => ({})),
-      fetch("/DATA/last_update.date", opts).then(r => r.text()).catch(() => ""),
+      safeJson("/DATA/accounts.json"),
+      safeJson("/DATA/positions.json"),
+      safeText("/DATA/last_update.date"),
     ]);
+
+    if (!accounts) {
+      // No data yet — typical on first run or right after switching
+      // accounts. Show a friendly call-to-action instead of an error.
+      document.getElementById("error-box").innerHTML =
+        `<div class="warning">
+          <b>Aún no hay datos descargados.</b>
+          Dale <b>⟳ Update</b> arriba para autenticar con GBM y bajar tu portafolio
+          por primera vez. Te pedirá el código de tu app autenticadora.
+        </div>`;
+      // Render an empty state so the page doesn't look broken.
+      state.accounts = [];
+      state.positionsByAccount = {};
+      state.positionsFlat = [];
+      renderAll();
+      return;
+    }
+    document.getElementById("error-box").innerHTML = "";
     state.accounts = accounts;
-    state.positionsByAccount = positionsByAccount;
+    state.positionsByAccount = positionsByAccount || {};
     state.lastUpdate = lastUpdate.trim();
 
     // Flatten positions across ALL accounts. Each position carries the
