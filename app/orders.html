@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GBM Movimientos</title>
+<style>
+:root {
+  --bg: #0f1419;
+  --card: #1a1f2e;
+  --border: #2a3142;
+  --text: #e8eef5;
+  --muted: #7a8599;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+  --purple: #c084fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5;
+}
+
+h1 {
+  font-size: 28px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 12px; font-weight: 700;
+}
+.logo-box {
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  width: 44px; height: 44px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: white;
+}
+
+.subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+
+.nav { display: flex; gap: 8px; margin-bottom: 24px; }
+.nav a {
+  color: var(--muted); text-decoration: none; font-size: 14px;
+  padding: 8px 18px; border-radius: 8px; font-weight: 500;
+  border: 1px solid var(--border); transition: all 0.15s;
+}
+.nav a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.nav a.active {
+  background: var(--blue); color: var(--bg); border-color: var(--blue); font-weight: 600;
+}
+
+.cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px; margin-bottom: 32px;
+}
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px;
+}
+.card .label {
+  color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: 8px;
+}
+.card .value { font-size: 26px; font-weight: 700; }
+.card .delta { font-size: 13px; margin-top: 6px; color: var(--muted); }
+
+.green { color: var(--green); }
+.red { color: var(--red); }
+.muted { color: var(--muted); }
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+
+.section {
+  margin: 32px 0 16px; font-size: 18px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+.badge {
+  background: var(--border); color: var(--muted); font-size: 12px;
+  padding: 3px 10px; border-radius: 12px; font-weight: 500;
+}
+
+.controls {
+  display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.controls input, .controls select {
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px;
+}
+.controls input { min-width: 220px; }
+
+table {
+  width: 100%; border-collapse: collapse; background: var(--card);
+  border-radius: 12px; overflow: hidden; margin-bottom: 12px;
+}
+th, td {
+  text-align: left; padding: 12px 14px; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  background: rgba(255,255,255,0.03); color: var(--muted);
+  font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap;
+}
+th:hover { color: var(--text); }
+tr:hover { background: rgba(255,255,255,0.02); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ticker { font-family: monospace; font-weight: 600; }
+.sob-id { font-family: monospace; color: var(--muted); font-size: 11px; }
+
+.side-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 700;
+}
+.side-buy { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.side-sell { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+
+.market-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 600;
+}
+.market-bmv { background: rgba(96, 165, 250, 0.15); color: var(--blue); }
+.market-sic { background: rgba(192, 132, 252, 0.15); color: var(--purple); }
+
+.error {
+  background: rgba(248, 113, 113, 0.1); border-left: 4px solid var(--red);
+  padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px;
+}
+.empty {
+  text-align: center; padding: 40px; color: var(--muted); font-size: 14px;
+}
+
+.disclaimer {
+  margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; line-height: 1.6;
+}
+.disclaimer a { color: var(--blue); text-decoration: none; }
+.disclaimer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>
+  <div class="logo-box">GBM</div>
+  Movimientos
+</h1>
+<div class="subtitle">
+  <span id="range-label">Rango: cargando...</span> ·
+  Cuenta: <span id="account-label">—</span> ·
+  Última actualización: <span id="last-update">—</span>
+</div>
+
+<div class="nav">
+  <a href="/app/index.html">📊 Portafolio</a>
+  <a href="/app/orders.html" class="active">📋 Movimientos</a>
+</div>
+
+<div id="error-box"></div>
+
+<!-- ---------- summary cards ---------- -->
+<div class="cards">
+  <div class="card">
+    <div class="label">Transacciones</div>
+    <div class="value" id="num-orders">—</div>
+    <div class="delta" id="num-orders-note">en el rango</div>
+  </div>
+  <div class="card">
+    <div class="label">Total invertido (compras)</div>
+    <div class="value" id="total-buy">—</div>
+    <div class="delta muted">suma de Importes Compra</div>
+  </div>
+  <div class="card">
+    <div class="label">Total ventas</div>
+    <div class="value" id="total-sell">—</div>
+    <div class="delta muted">suma de Importes Venta</div>
+  </div>
+  <div class="card">
+    <div class="label">Comisiones pagadas</div>
+    <div class="value" id="total-commission">—</div>
+    <div class="delta muted">total acumulado</div>
+  </div>
+</div>
+
+<!-- ---------- by month ---------- -->
+<div class="section">
+  <span>Resumen por mes</span>
+  <span class="badge" id="months-count">—</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Mes</th>
+      <th class="num">Compras</th>
+      <th class="num">Monto compras</th>
+      <th class="num">Ventas</th>
+      <th class="num">Monto ventas</th>
+      <th class="num">Comisiones</th>
+    </tr>
+  </thead>
+  <tbody id="months-tbody"></tbody>
+</table>
+
+<!-- ---------- by ticker ---------- -->
+<div class="section">
+  <span>Top emisoras</span>
+  <span class="badge muted">por monto invertido</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Emisora</th>
+      <th class="num"># Operaciones</th>
+      <th class="num">Títulos comprados</th>
+      <th class="num">Monto comprado</th>
+      <th class="num">Precio promedio</th>
+    </tr>
+  </thead>
+  <tbody id="tickers-tbody"></tbody>
+</table>
+
+<!-- ---------- all transactions ---------- -->
+<div class="section">
+  <span>Todas las transacciones</span>
+  <span class="badge" id="orders-count">—</span>
+</div>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="Buscar emisora..." oninput="renderTable()">
+  <select id="side-filter" onchange="renderTable()">
+    <option value="">Todas las operaciones</option>
+    <option value="BUY">Solo compras</option>
+    <option value="SELL">Solo ventas</option>
+  </select>
+  <select id="month-filter" onchange="renderTable()">
+    <option value="">Todos los meses</option>
+  </select>
+  <select id="ticker-filter" onchange="renderTable()">
+    <option value="">Todas las emisoras</option>
+  </select>
+</div>
+
+<table id="orders-table">
+  <thead>
+    <tr>
+      <th onclick="setSort('processed_at')">Fecha / Hora</th>
+      <th onclick="setSort('issue_id')">Emisora</th>
+      <th onclick="setSort('side')">Tipo</th>
+      <th class="num" onclick="setSort('quantity')">Cantidad</th>
+      <th class="num" onclick="setSort('average_price')">Precio</th>
+      <th class="num" onclick="setSort('amount')">Importe</th>
+      <th class="num" onclick="setSort('commission')">Comisión</th>
+      <th>ID</th>
+    </tr>
+  </thead>
+  <tbody id="orders-tbody"></tbody>
+</table>
+
+<div class="disclaimer">
+  Dashboard no oficial — datos vía
+  <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
+  Todo corre en localhost; nada de tus datos sale de tu máquina.
+  Solo se muestran órdenes con estatus <b>Llena</b> de la cuenta principal de trading.
+</div>
+
+<script>
+// ----------------------------------------------------------------------
+// Format helpers (same as index.html)
+// ----------------------------------------------------------------------
+const fmtMoney = (n, opts = {}) => {
+  if (n == null || isNaN(n)) return "—";
+  const { sign = false, decimals = 2, currency = false } = opts;
+  const abs = Math.abs(n);
+  const formatted = abs.toLocaleString("es-MX", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+  const signPrefix = n < 0 ? "-" : (sign && n > 0 ? "+" : "");
+  const currencyPrefix = currency ? "$" : "";
+  return signPrefix + currencyPrefix + formatted;
+};
+const formatDate = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("es-MX", {
+    year: "numeric", month: "short", day: "2-digit",
+  });
+};
+const formatTime = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: true });
+};
+const formatTimestamp = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString("es-MX", {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+};
+const MONTH_NAMES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+const monthKey = (iso) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+const monthLabel = (key) => {
+  const [y, m] = key.split("-");
+  return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`;
+};
+
+const MARKETS = { 0: { label: "BMV", cls: "market-bmv" }, 2: { label: "SIC", cls: "market-sic" } };
+
+let state = {
+  orders: [],
+  fromDate: null,
+  toDate: null,
+  accountLegacy: null,
+  accountName: null,
+  sortKey: "processed_at",
+  sortDir: "desc",
+};
+
+async function load() {
+  try {
+    const opts = { cache: "no-store" };
+    const [data, lastUpdate] = await Promise.all([
+      fetch("/DATA/orders.json", opts).then(r => r.ok ? r.json() : null),
+      fetch("/DATA/last_update.date", opts).then(r => r.ok ? r.text() : ""),
+    ]);
+    if (!data) {
+      document.getElementById("error-box").innerHTML =
+        `<div class="error"><b>No hay datos de movimientos todavía.</b><br>
+         Ve a <a href="/app/index.html" style="color: var(--blue);">Portafolio</a>
+         y dale ⟳ Update — se descargarán las órdenes de los últimos 90 días.</div>`;
+      return;
+    }
+    state.orders = data.orders || [];
+    state.fromDate = data.from_date;
+    state.toDate = data.to_date;
+    state.accountLegacy = data.account_legacy_id;
+    state.accountName = data.account_name;
+
+    document.getElementById("range-label").textContent =
+      `Rango: ${state.fromDate} → ${state.toDate}`;
+    document.getElementById("account-label").textContent =
+      `${state.accountName || "—"} (${state.accountLegacy || "—"})`;
+    document.getElementById("last-update").textContent = formatTimestamp(lastUpdate.trim());
+
+    populateFilters();
+    renderAll();
+  } catch (err) {
+    document.getElementById("error-box").innerHTML =
+      `<div class="error"><b>Error cargando datos.</b><br>${err.message}</div>`;
+  }
+}
+
+function populateFilters() {
+  // Months present in the data
+  const months = [...new Set(state.orders.map(o => monthKey(o.processed_at)))].sort().reverse();
+  const monthSel = document.getElementById("month-filter");
+  for (const m of months) {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = monthLabel(m);
+    monthSel.appendChild(opt);
+  }
+  // Tickers present
+  const tickers = [...new Set(state.orders.map(o => o.issue_id))].sort();
+  const tickerSel = document.getElementById("ticker-filter");
+  for (const t of tickers) {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    tickerSel.appendChild(opt);
+  }
+}
+
+function renderAll() {
+  renderCards();
+  renderMonths();
+  renderTickers();
+  renderTable();
+}
+
+function renderCards() {
+  const buys = state.orders.filter(o => o.side === "BUY");
+  const sells = state.orders.filter(o => o.side === "SELL");
+  const totalBuy = buys.reduce((s, o) => s + o.amount, 0);
+  const totalSell = sells.reduce((s, o) => s + o.amount, 0);
+  const totalComm = state.orders.reduce((s, o) => s + o.commission + (o.iva || 0), 0);
+
+  document.getElementById("num-orders").textContent = state.orders.length;
+  document.getElementById("num-orders-note").textContent =
+    `${buys.length} compras, ${sells.length} ventas`;
+  document.getElementById("total-buy").textContent = fmtMoney(totalBuy, { currency: true });
+  document.getElementById("total-sell").textContent = fmtMoney(totalSell, { currency: true });
+  document.getElementById("total-commission").textContent = fmtMoney(totalComm, { currency: true });
+}
+
+function renderMonths() {
+  const byMonth = {};
+  for (const o of state.orders) {
+    const k = monthKey(o.processed_at);
+    if (!byMonth[k]) byMonth[k] = { buys: 0, buy_amt: 0, sells: 0, sell_amt: 0, comm: 0 };
+    if (o.side === "BUY") {
+      byMonth[k].buys++;
+      byMonth[k].buy_amt += o.amount;
+    } else {
+      byMonth[k].sells++;
+      byMonth[k].sell_amt += o.amount;
+    }
+    byMonth[k].comm += o.commission + (o.iva || 0);
+  }
+  const keys = Object.keys(byMonth).sort().reverse();
+  document.getElementById("months-count").textContent = keys.length;
+  document.getElementById("months-tbody").innerHTML = keys.map(k => {
+    const m = byMonth[k];
+    return `<tr>
+      <td>${monthLabel(k)}</td>
+      <td class="num">${m.buys}</td>
+      <td class="num">${fmtMoney(m.buy_amt, { currency: true })}</td>
+      <td class="num">${m.sells || "—"}</td>
+      <td class="num">${m.sells ? fmtMoney(m.sell_amt, { currency: true }) : "—"}</td>
+      <td class="num">${fmtMoney(m.comm, { currency: true })}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="6" class="empty">Sin datos</td></tr>`;
+}
+
+function renderTickers() {
+  const byTicker = {};
+  for (const o of state.orders) {
+    if (o.side !== "BUY") continue;  // ranking by amount invested
+    if (!byTicker[o.issue_id]) byTicker[o.issue_id] = { count: 0, qty: 0, amount: 0 };
+    byTicker[o.issue_id].count++;
+    byTicker[o.issue_id].qty += o.quantity;
+    byTicker[o.issue_id].amount += o.amount;
+  }
+  const rows = Object.entries(byTicker)
+    .map(([t, v]) => ({
+      issue_id: t,
+      count: v.count,
+      qty: v.qty,
+      amount: v.amount,
+      avg: v.qty ? v.amount / v.qty : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 15);
+
+  document.getElementById("tickers-tbody").innerHTML = rows.map(r => `<tr>
+    <td class="ticker">${r.issue_id}</td>
+    <td class="num">${r.count}</td>
+    <td class="num">${fmtMoney(r.qty, { decimals: r.qty % 1 === 0 ? 0 : 4 })}</td>
+    <td class="num">${fmtMoney(r.amount, { currency: true })}</td>
+    <td class="num">${fmtMoney(r.avg)}</td>
+  </tr>`).join("") || `<tr><td colspan="5" class="empty">Sin datos</td></tr>`;
+}
+
+function setSort(key) {
+  if (state.sortKey === key) {
+    state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+  } else {
+    state.sortKey = key;
+    state.sortDir = "desc";
+  }
+  renderTable();
+}
+
+function renderTable() {
+  const search = document.getElementById("search").value.toLowerCase();
+  const sideFilter = document.getElementById("side-filter").value;
+  const monthFilter = document.getElementById("month-filter").value;
+  const tickerFilter = document.getElementById("ticker-filter").value;
+
+  let rows = state.orders.filter(o => {
+    if (search && !o.issue_id.toLowerCase().includes(search)) return false;
+    if (sideFilter && o.side !== sideFilter) return false;
+    if (monthFilter && monthKey(o.processed_at) !== monthFilter) return false;
+    if (tickerFilter && o.issue_id !== tickerFilter) return false;
+    return true;
+  });
+
+  rows.sort((a, b) => {
+    const va = a[state.sortKey];
+    const vb = b[state.sortKey];
+    if (typeof va === "string" && typeof vb === "string") {
+      return state.sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+    return state.sortDir === "asc" ? va - vb : vb - va;
+  });
+
+  document.getElementById("orders-count").textContent =
+    `${rows.length} / ${state.orders.length}`;
+
+  document.getElementById("orders-tbody").innerHTML = rows.map(o => {
+    const sideClass = o.side === "BUY" ? "side-buy" : "side-sell";
+    const sideLabel = o.side === "BUY" ? "Compra" : "Venta";
+    const market = MARKETS[o.instrument_type];
+    return `<tr>
+      <td>${formatDate(o.processed_at)}
+        <div class="muted" style="font-size: 11px;">${formatTime(o.processed_at)}</div>
+      </td>
+      <td class="ticker">${o.issue_id}
+        ${market ? `<span class="market-pill ${market.cls}" style="margin-left: 8px;">${market.label}</span>` : ""}
+      </td>
+      <td><span class="side-pill ${sideClass}">${sideLabel}</span></td>
+      <td class="num">${fmtMoney(o.quantity, { decimals: o.quantity % 1 === 0 ? 0 : 4 })}</td>
+      <td class="num">${fmtMoney(o.average_price)}</td>
+      <td class="num">${fmtMoney(o.amount, { currency: true })}</td>
+      <td class="num">${fmtMoney(o.commission)}</td>
+      <td class="sob-id">${o.sob_id}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8" class="empty">Sin transacciones que coincidan con los filtros</td></tr>`;
+}
+
+load();
+</script>
+</body>
+</html>
