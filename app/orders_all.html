@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>GBM Movimientos</title>
+<title>GBM Histórico completo</title>
 <style>
 :root {
   --bg: #0f1419;
@@ -51,22 +51,24 @@ h1 {
 }
 
 .cards {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px; margin-bottom: 32px;
 }
 .card {
   background: var(--card); border: 1px solid var(--border);
-  border-radius: 12px; padding: 20px;
+  border-radius: 12px; padding: 18px;
 }
 .card .label {
   color: var(--muted); font-size: 11px; text-transform: uppercase;
   letter-spacing: 0.8px; margin-bottom: 8px;
 }
 .card .value { font-size: 26px; font-weight: 700; }
-.card .delta { font-size: 13px; margin-top: 6px; color: var(--muted); }
+.card .delta { font-size: 12px; margin-top: 4px; color: var(--muted); }
 
 .green { color: var(--green); }
 .red { color: var(--red); }
+.amber { color: var(--amber); }
+.blue { color: var(--blue); }
 .muted { color: var(--muted); }
 .pos { color: var(--green); }
 .neg { color: var(--red); }
@@ -107,28 +109,27 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .ticker { font-family: monospace; font-weight: 600; }
 .sob-id { font-family: monospace; color: var(--muted); font-size: 11px; }
 
-.side-pill {
+.side-pill, .status-pill {
   display: inline-block; padding: 2px 8px; border-radius: 10px;
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
   font-weight: 700;
 }
 .side-buy { background: rgba(74, 222, 128, 0.15); color: var(--green); }
 .side-sell { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+.status-filled { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.status-cancelled { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+.status-other { background: rgba(251, 191, 36, 0.15); color: var(--amber); }
 
-.market-pill {
-  display: inline-block; padding: 2px 8px; border-radius: 10px;
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
-  font-weight: 600;
+.empty {
+  text-align: center; padding: 40px; color: var(--muted); font-size: 14px;
 }
-.market-bmv { background: rgba(96, 165, 250, 0.15); color: var(--blue); }
-.market-sic { background: rgba(192, 132, 252, 0.15); color: var(--purple); }
-
 .error {
   background: rgba(248, 113, 113, 0.1); border-left: 4px solid var(--red);
   padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px;
 }
-.empty {
-  text-align: center; padding: 40px; color: var(--muted); font-size: 14px;
+.warning {
+  background: rgba(251, 191, 36, 0.1); border-left: 4px solid var(--amber);
+  padding: 14px 18px; border-radius: 8px; margin: 16px 0; font-size: 13px;
 }
 
 .disclaimer {
@@ -136,25 +137,24 @@ tr:hover { background: rgba(255,255,255,0.02); }
   color: var(--muted); font-size: 11px; line-height: 1.6;
 }
 .disclaimer a { color: var(--blue); text-decoration: none; }
-.disclaimer a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
 
 <h1>
   <div class="logo-box">GBM</div>
-  Movimientos
+  Histórico completo
 </h1>
 <div class="subtitle">
   <span id="range-label">Rango: cargando...</span> ·
-  Cuenta: <span id="account-label">—</span> ·
+  Cuentas: <span id="account-label">—</span> ·
   Última actualización: <span id="last-update">—</span>
 </div>
 
 <div class="nav">
   <a href="/app/index.html">📊 Portafolio</a>
-  <a href="/app/orders.html" class="active">📋 Movimientos</a>
-  <a href="/app/orders_all.html">📜 Histórico</a>
+  <a href="/app/orders.html">📋 Movimientos</a>
+  <a href="/app/orders_all.html" class="active">📜 Histórico</a>
 </div>
 
 <div id="error-box"></div>
@@ -162,74 +162,43 @@ tr:hover { background: rgba(255,255,255,0.02); }
 <!-- ---------- summary cards ---------- -->
 <div class="cards">
   <div class="card">
-    <div class="label">Transacciones</div>
-    <div class="value" id="num-orders">—</div>
-    <div class="delta" id="num-orders-note">en el rango</div>
+    <div class="label">Total órdenes</div>
+    <div class="value" id="num-total">—</div>
+    <div class="delta">en el rango</div>
   </div>
   <div class="card">
-    <div class="label">Total invertido (compras)</div>
-    <div class="value" id="total-buy">—</div>
-    <div class="delta muted">suma de Importes Compra</div>
+    <div class="label">Realizadas (llenas)</div>
+    <div class="value green" id="num-filled">—</div>
+    <div class="delta" id="filled-amount">—</div>
   </div>
   <div class="card">
-    <div class="label">Total ventas</div>
-    <div class="value" id="total-sell">—</div>
-    <div class="delta muted">suma de Importes Venta</div>
+    <div class="label">Canceladas</div>
+    <div class="value red" id="num-cancelled">—</div>
+    <div class="delta" id="cancelled-amount">—</div>
   </div>
   <div class="card">
-    <div class="label">Comisiones pagadas</div>
-    <div class="value" id="total-commission">—</div>
-    <div class="delta muted">total acumulado</div>
+    <div class="label">Otras (pendientes / parciales)</div>
+    <div class="value amber" id="num-other">—</div>
+    <div class="delta" id="other-amount">—</div>
   </div>
 </div>
 
-<!-- ---------- by month ---------- -->
+<!-- ---------- filters ---------- -->
 <div class="section">
-  <span>Resumen por mes</span>
-  <span class="badge" id="months-count">—</span>
-</div>
-<table>
-  <thead>
-    <tr>
-      <th>Mes</th>
-      <th class="num">Compras</th>
-      <th class="num">Monto compras</th>
-      <th class="num">Ventas</th>
-      <th class="num">Monto ventas</th>
-      <th class="num">Comisiones</th>
-    </tr>
-  </thead>
-  <tbody id="months-tbody"></tbody>
-</table>
-
-<!-- ---------- by ticker ---------- -->
-<div class="section">
-  <span>Top emisoras</span>
-  <span class="badge muted">por monto invertido</span>
-</div>
-<table>
-  <thead>
-    <tr>
-      <th>Emisora</th>
-      <th class="num"># Operaciones</th>
-      <th class="num">Títulos comprados</th>
-      <th class="num">Monto comprado</th>
-      <th class="num">Precio promedio</th>
-    </tr>
-  </thead>
-  <tbody id="tickers-tbody"></tbody>
-</table>
-
-<!-- ---------- all transactions ---------- -->
-<div class="section">
-  <span>Todas las transacciones</span>
+  <span>Todas las órdenes</span>
   <span class="badge" id="orders-count">—</span>
 </div>
 
 <div class="controls">
   <input type="text" id="search" placeholder="Buscar emisora..." oninput="renderTable()">
+  <select id="status-filter" onchange="renderTable()">
+    <option value="">Todos los estados</option>
+    <option value="filled">Solo realizadas</option>
+    <option value="cancelled">Solo canceladas</option>
+    <option value="other">Solo pendientes / otras</option>
+  </select>
   <select id="side-filter" onchange="renderTable()">
-    <option value="">Todas las operaciones</option>
+    <option value="">Compras y ventas</option>
     <option value="BUY">Solo compras</option>
     <option value="SELL">Solo ventas</option>
   </select>
@@ -239,9 +208,11 @@ tr:hover { background: rgba(255,255,255,0.02); }
   <select id="ticker-filter" onchange="renderTable()">
     <option value="">Todas las emisoras</option>
   </select>
-  <span style="display: none;"><select id="account-filter" onchange="renderTable()">
-    <option value="">Todas las cuentas</option>
-  </select></span>
+  <span id="account-filter-wrap" style="display: none;">
+    <select id="account-filter" onchange="renderTable()">
+      <option value="">Todas las cuentas</option>
+    </select>
+  </span>
 </div>
 
 <table id="orders-table">
@@ -251,10 +222,11 @@ tr:hover { background: rgba(255,255,255,0.02); }
       <th onclick="setSort('issue_id')">Emisora</th>
       <th onclick="setSort('account_name')">Cuenta</th>
       <th onclick="setSort('side')">Tipo</th>
-      <th class="num" onclick="setSort('quantity')">Cantidad</th>
-      <th class="num" onclick="setSort('average_price')">Precio</th>
+      <th onclick="setSort('status')">Estado</th>
+      <th class="num" onclick="setSort('original_quantity')">Pedido</th>
+      <th class="num" onclick="setSort('assigned_quantity')">Asignado</th>
+      <th class="num" onclick="setSort('average_price')">Precio prom.</th>
       <th class="num" onclick="setSort('amount')">Importe</th>
-      <th class="num" onclick="setSort('commission')">Comisión</th>
       <th>ID</th>
     </tr>
   </thead>
@@ -264,36 +236,30 @@ tr:hover { background: rgba(255,255,255,0.02); }
 <div class="disclaimer">
   Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5</span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
-  Todo corre en localhost; nada de tus datos sale de tu máquina.
-  Solo se muestran órdenes con estatus <b>Llena</b> de las cuentas tipo trading.
+  Esta página muestra <b>todas las órdenes</b> independientemente de su estado
+  (realizadas, canceladas, pendientes o parciales). Para ver solo las
+  realizadas, ve a <a href="/app/orders.html">📋 Movimientos</a>.
 </div>
 
 <script>
-// ----------------------------------------------------------------------
-// Format helpers (same as index.html)
-// ----------------------------------------------------------------------
 const fmtMoney = (n, opts = {}) => {
   if (n == null || isNaN(n)) return "—";
-  const { sign = false, decimals = 2, currency = false } = opts;
+  const { decimals = 2, currency = false } = opts;
   const abs = Math.abs(n);
   const formatted = abs.toLocaleString("es-MX", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    minimumFractionDigits: decimals, maximumFractionDigits: decimals,
   });
-  const signPrefix = n < 0 ? "-" : (sign && n > 0 ? "+" : "");
-  const currencyPrefix = currency ? "$" : "";
-  return signPrefix + currencyPrefix + formatted;
+  const sign = n < 0 ? "-" : "";
+  return sign + (currency ? "$" : "") + formatted;
 };
 const formatDate = (iso) => {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("es-MX", {
-    year: "numeric", month: "short", day: "2-digit",
-  });
+  return d.toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "2-digit" });
 };
 const formatTime = (iso) => {
-  if (!iso) return "—";
+  if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
   return d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: true });
@@ -308,26 +274,23 @@ const formatTimestamp = (iso) => {
   });
 };
 const MONTH_NAMES = [
-  "enero", "febrero", "marzo", "abril", "mayo", "junio",
-  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+  "enero","febrero","marzo","abril","mayo","junio",
+  "julio","agosto","septiembre","octubre","noviembre","diciembre",
 ];
 const monthKey = (iso) => {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
-const monthLabel = (key) => {
-  const [y, m] = key.split("-");
+const monthLabel = (k) => {
+  const [y, m] = k.split("-");
   return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`;
 };
 
-const MARKETS = { 0: { label: "BMV", cls: "market-bmv" }, 2: { label: "SIC", cls: "market-sic" } };
-
 let state = {
   orders: [],
+  accounts: [],
   fromDate: null,
   toDate: null,
-  accountLegacy: null,
-  accountName: null,
   sortKey: "processed_at",
   sortDir: "desc",
 };
@@ -339,41 +302,36 @@ async function load() {
       fetch(url, opts).then(r => (r.ok ? r.json() : null)).catch(() => null);
     const safeText = (url) =>
       fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
-
     const [data, lastUpdate] = await Promise.all([
-      safeJson("/DATA/orders.json"),
+      safeJson("/DATA/orders_all.json"),
       safeText("/DATA/last_update.date"),
     ]);
     if (!data) {
       document.getElementById("error-box").innerHTML =
-        `<div class="error"><b>No hay datos de movimientos todavía.</b><br>
-         Ve a <a href="/app/index.html" style="color: var(--blue);">Portafolio</a>
-         y dale ⟳ Update — se descargarán las órdenes de los últimos 90 días.</div>`;
+        `<div class="warning">
+          <b>Aún no hay datos del histórico.</b>
+          Ve a <a href="/app/index.html" style="color: var(--blue);">📊 Portafolio</a>
+          y dale <b>⟳ Update</b> — se descargan todas las órdenes (cualquier
+          estado) de los últimos 90 días.
+        </div>`;
       return;
     }
     state.orders = data.orders || [];
+    state.accounts = data.accounts || [];
     state.fromDate = data.from_date;
     state.toDate = data.to_date;
-    // v0.4.3+ ships orders from multiple accounts; older payloads had a
-    // single account_legacy_id/account_name pair. Support both.
-    state.accounts = data.accounts || (
-      data.account_legacy_id
-        ? [{ legacy_contract_id: data.account_legacy_id, name: data.account_name }]
-        : []
-    );
 
     document.getElementById("range-label").textContent =
       `Rango: ${state.fromDate} → ${state.toDate}`;
-    const accLabel = state.accounts.length === 0
-      ? "—"
-      : state.accounts.length === 1
-        ? `${state.accounts[0].name || "—"} (${state.accounts[0].legacy_contract_id})`
+    document.getElementById("account-label").textContent =
+      state.accounts.length === 1
+        ? `${state.accounts[0].name} (${state.accounts[0].legacy_contract_id})`
         : `${state.accounts.length} cuentas`;
-    document.getElementById("account-label").textContent = accLabel;
     document.getElementById("last-update").textContent = formatTimestamp(lastUpdate.trim());
 
     populateFilters();
-    renderAll();
+    renderCards();
+    renderTable();
   } catch (err) {
     document.getElementById("error-box").innerHTML =
       `<div class="error"><b>Error cargando datos.</b><br>${err.message}</div>`;
@@ -381,133 +339,66 @@ async function load() {
 }
 
 function populateFilters() {
-  // Months present in the data
   const months = [...new Set(state.orders.map(o => monthKey(o.processed_at)))].sort().reverse();
   const monthSel = document.getElementById("month-filter");
   for (const m of months) {
     const opt = document.createElement("option");
-    opt.value = m;
-    opt.textContent = monthLabel(m);
+    opt.value = m; opt.textContent = monthLabel(m);
     monthSel.appendChild(opt);
   }
-  // Tickers present
   const tickers = [...new Set(state.orders.map(o => o.issue_id))].sort();
   const tickerSel = document.getElementById("ticker-filter");
   for (const t of tickers) {
     const opt = document.createElement("option");
-    opt.value = t;
-    opt.textContent = t;
+    opt.value = t; opt.textContent = t;
     tickerSel.appendChild(opt);
   }
-  // Accounts present in the orders (v0.4.3+). Only add the filter if there
-  // is more than one account, otherwise it's just noise.
-  const accountsInOrders = [...new Set(state.orders.map(o => o.account_legacy_id || ""))]
-    .filter(Boolean);
+  const accountsInOrders = [...new Set(state.orders.map(o => o.account_legacy_id || ""))].filter(Boolean);
   if (accountsInOrders.length > 1) {
+    document.getElementById("account-filter-wrap").style.display = "";
     const accSel = document.getElementById("account-filter");
-    accSel.parentElement.style.display = "";  // unhide
     for (const id of accountsInOrders) {
       const name = state.accounts.find(a => a.legacy_contract_id === id)?.name || id;
       const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = `${name} (${id})`;
+      opt.value = id; opt.textContent = `${name} (${id})`;
       accSel.appendChild(opt);
     }
   }
 }
 
-function renderAll() {
-  renderCards();
-  renderMonths();
-  renderTickers();
-  renderTable();
-}
-
 function renderCards() {
-  const buys = state.orders.filter(o => o.side === "BUY");
-  const sells = state.orders.filter(o => o.side === "SELL");
-  const totalBuy = buys.reduce((s, o) => s + o.amount, 0);
-  const totalSell = sells.reduce((s, o) => s + o.amount, 0);
-  const totalComm = state.orders.reduce((s, o) => s + o.commission + (o.iva || 0), 0);
+  const filled = state.orders.filter(o => o.is_filled);
+  const cancelled = state.orders.filter(o => o.is_cancelled);
+  const other = state.orders.filter(o => !o.is_filled && !o.is_cancelled);
+  const sum = (arr) => arr.reduce((s, o) => s + (o.amount || 0), 0);
 
-  document.getElementById("num-orders").textContent = state.orders.length;
-  document.getElementById("num-orders-note").textContent =
-    `${buys.length} compras, ${sells.length} ventas`;
-  document.getElementById("total-buy").textContent = fmtMoney(totalBuy, { currency: true });
-  document.getElementById("total-sell").textContent = fmtMoney(totalSell, { currency: true });
-  document.getElementById("total-commission").textContent = fmtMoney(totalComm, { currency: true });
-}
-
-function renderMonths() {
-  const byMonth = {};
-  for (const o of state.orders) {
-    const k = monthKey(o.processed_at);
-    if (!byMonth[k]) byMonth[k] = { buys: 0, buy_amt: 0, sells: 0, sell_amt: 0, comm: 0 };
-    if (o.side === "BUY") {
-      byMonth[k].buys++;
-      byMonth[k].buy_amt += o.amount;
-    } else {
-      byMonth[k].sells++;
-      byMonth[k].sell_amt += o.amount;
-    }
-    byMonth[k].comm += o.commission + (o.iva || 0);
-  }
-  const keys = Object.keys(byMonth).sort().reverse();
-  document.getElementById("months-count").textContent = keys.length;
-  document.getElementById("months-tbody").innerHTML = keys.map(k => {
-    const m = byMonth[k];
-    return `<tr>
-      <td>${monthLabel(k)}</td>
-      <td class="num">${m.buys}</td>
-      <td class="num">${fmtMoney(m.buy_amt, { currency: true })}</td>
-      <td class="num">${m.sells || "—"}</td>
-      <td class="num">${m.sells ? fmtMoney(m.sell_amt, { currency: true }) : "—"}</td>
-      <td class="num">${fmtMoney(m.comm, { currency: true })}</td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="6" class="empty">Sin datos</td></tr>`;
-}
-
-function renderTickers() {
-  const byTicker = {};
-  for (const o of state.orders) {
-    if (o.side !== "BUY") continue;  // ranking by amount invested
-    if (!byTicker[o.issue_id]) byTicker[o.issue_id] = { count: 0, qty: 0, amount: 0 };
-    byTicker[o.issue_id].count++;
-    byTicker[o.issue_id].qty += o.quantity;
-    byTicker[o.issue_id].amount += o.amount;
-  }
-  const rows = Object.entries(byTicker)
-    .map(([t, v]) => ({
-      issue_id: t,
-      count: v.count,
-      qty: v.qty,
-      amount: v.amount,
-      avg: v.qty ? v.amount / v.qty : 0,
-    }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 15);
-
-  document.getElementById("tickers-tbody").innerHTML = rows.map(r => `<tr>
-    <td class="ticker">${r.issue_id}</td>
-    <td class="num">${r.count}</td>
-    <td class="num">${fmtMoney(r.qty, { decimals: r.qty % 1 === 0 ? 0 : 4 })}</td>
-    <td class="num">${fmtMoney(r.amount, { currency: true })}</td>
-    <td class="num">${fmtMoney(r.avg)}</td>
-  </tr>`).join("") || `<tr><td colspan="5" class="empty">Sin datos</td></tr>`;
+  document.getElementById("num-total").textContent = state.orders.length;
+  document.getElementById("num-filled").textContent = filled.length;
+  document.getElementById("filled-amount").textContent =
+    "$" + fmtMoney(sum(filled));
+  document.getElementById("num-cancelled").textContent = cancelled.length;
+  document.getElementById("cancelled-amount").textContent =
+    "$" + fmtMoney(cancelled.reduce((s, o) => s + ((o.original_quantity || 0) * (o.limit_price || 0)), 0));
+  document.getElementById("num-other").textContent = other.length;
+  document.getElementById("other-amount").textContent =
+    other.length > 0 ? `${other.map(o => o.status_label).filter((v, i, a) => a.indexOf(v) === i).join(", ")}` : "—";
 }
 
 function setSort(key) {
-  if (state.sortKey === key) {
-    state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
-  } else {
-    state.sortKey = key;
-    state.sortDir = "desc";
-  }
+  if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+  else { state.sortKey = key; state.sortDir = "desc"; }
   renderTable();
+}
+
+function statusPillClass(o) {
+  if (o.is_filled) return "status-filled";
+  if (o.is_cancelled) return "status-cancelled";
+  return "status-other";
 }
 
 function renderTable() {
   const search = document.getElementById("search").value.toLowerCase();
+  const statusFilter = document.getElementById("status-filter").value;
   const sideFilter = document.getElementById("side-filter").value;
   const monthFilter = document.getElementById("month-filter").value;
   const tickerFilter = document.getElementById("ticker-filter").value;
@@ -515,6 +406,9 @@ function renderTable() {
 
   let rows = state.orders.filter(o => {
     if (search && !o.issue_id.toLowerCase().includes(search)) return false;
+    if (statusFilter === "filled" && !o.is_filled) return false;
+    if (statusFilter === "cancelled" && !o.is_cancelled) return false;
+    if (statusFilter === "other" && (o.is_filled || o.is_cancelled)) return false;
     if (sideFilter && o.side !== sideFilter) return false;
     if (monthFilter && monthKey(o.processed_at) !== monthFilter) return false;
     if (tickerFilter && o.issue_id !== tickerFilter) return false;
@@ -528,7 +422,7 @@ function renderTable() {
     if (typeof va === "string" && typeof vb === "string") {
       return state.sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
     }
-    return state.sortDir === "asc" ? va - vb : vb - va;
+    return state.sortDir === "asc" ? (va - vb) : (vb - va);
   });
 
   document.getElementById("orders-count").textContent =
@@ -537,23 +431,28 @@ function renderTable() {
   document.getElementById("orders-tbody").innerHTML = rows.map(o => {
     const sideClass = o.side === "BUY" ? "side-buy" : "side-sell";
     const sideLabel = o.side === "BUY" ? "Compra" : "Venta";
-    const market = MARKETS[o.instrument_type];
+    const pillCls = statusPillClass(o);
+    const statusText = o.is_filled ? "Llena"
+                     : o.is_cancelled ? "Cancelada"
+                     : (o.status_label || `Estado ${o.status}`);
+    const cancelNote = (o.cancel_message && o.is_cancelled)
+      ? `<div class="muted" style="font-size: 10px;">${o.cancel_message}</div>` : "";
+    const qtyDec = (q) => (q % 1 === 0) ? 0 : 4;
     return `<tr>
       <td>${formatDate(o.processed_at)}
         <div class="muted" style="font-size: 11px;">${formatTime(o.processed_at)}</div>
       </td>
-      <td class="ticker">${o.issue_id}
-        ${market ? `<span class="market-pill ${market.cls}" style="margin-left: 8px;">${market.label}</span>` : ""}
-      </td>
+      <td class="ticker">${o.issue_id}</td>
       <td style="color: var(--muted); font-size: 12px;">${o.account_name || "—"}</td>
       <td><span class="side-pill ${sideClass}">${sideLabel}</span></td>
-      <td class="num">${fmtMoney(o.quantity, { decimals: o.quantity % 1 === 0 ? 0 : 4 })}</td>
-      <td class="num">${fmtMoney(o.average_price)}</td>
-      <td class="num">${fmtMoney(o.amount, { currency: true })}</td>
-      <td class="num">${fmtMoney(o.commission)}</td>
+      <td><span class="status-pill ${pillCls}">${statusText}</span>${cancelNote}</td>
+      <td class="num">${fmtMoney(o.original_quantity, { decimals: qtyDec(o.original_quantity) })}</td>
+      <td class="num">${fmtMoney(o.assigned_quantity, { decimals: qtyDec(o.assigned_quantity) })}</td>
+      <td class="num">${o.is_filled ? fmtMoney(o.average_price) : fmtMoney(o.limit_price)}</td>
+      <td class="num">${o.is_filled ? fmtMoney(o.amount, { currency: true }) : "—"}</td>
       <td class="sob-id">${o.sob_id}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="9" class="empty">Sin transacciones que coincidan con los filtros</td></tr>`;
+  }).join("") || `<tr><td colspan="10" class="empty">Sin órdenes que coincidan con los filtros</td></tr>`;
 }
 
 load();

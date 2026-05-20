@@ -253,54 +253,88 @@ def main() -> None:
                     f"for {len(trading_accounts)} trading account(s)..."
                 )
 
+                # We download ALL orders (any status) once per account
+                # using list_for_range, then derive the filled-only view
+                # for backward compatibility with the Movimientos page.
+                # This avoids hitting the backend twice per day.
                 all_orders: list[dict] = []
+                filled_orders: list[dict] = []
                 for acct in trading_accounts:
                     try:
-                        filled = client.orders.list_filled(
+                        raw_orders = client.orders.list_for_range(
                             acct.legacy_contract_id, from_date_, to_date_
                         )
                     except ApiError as e:
                         print(f"  {acct.name} ({acct.legacy_contract_id}): {e}")
                         continue
+                    n_filled = sum(1 for o in raw_orders if o.is_filled)
                     print(
-                        f"  {acct.name} ({acct.legacy_contract_id}): {len(filled)} orders"
+                        f"  {acct.name} ({acct.legacy_contract_id}): "
+                        f"{len(raw_orders)} total, {n_filled} filled"
                     )
-                    for o in filled:
-                        all_orders.append(
-                            {
-                                "sob_id": o.sob_id,
-                                "account_id": o.account_id,
-                                "issue_id": o.issue_id,
-                                "instrument_type": int(o.instrument_type),
-                                "side": o.side.name,
-                                "quantity": o.quantity,
-                                "average_price": float(o.average_price),
-                                "amount": float(o.amount),
-                                "commission": float(o.commission),
-                                "iva": float(o.iva),
-                                "processed_at": o.processed_at.isoformat(),
-                                # Per-order account info (new in v0.4.3)
-                                "account_legacy_id": acct.legacy_contract_id,
-                                "account_name": acct.name,
-                            }
-                        )
-
-                # Sort chronologically (oldest first) for stable display.
-                all_orders.sort(key=lambda o: o["processed_at"])
-
-                orders_payload = {
-                    "from_date": from_date_.isoformat(),
-                    "to_date": to_date_.isoformat(),
-                    "accounts": [
-                        {
-                            "legacy_contract_id": a.legacy_contract_id,
-                            "name": a.name,
+                    for o in raw_orders:
+                        # Common shape for both files.
+                        amount = float(o.assigned_quantity * o.average_price)
+                        common = {
+                            "sob_id": o.sob_id,
+                            "account_id": o.account_id,
+                            "issue_id": o.issue_id,
+                            "instrument_type": int(o.instrument_type),
+                            "side": o.side.name,
+                            "status": o.status,
+                            "status_label": o.status_label,
+                            "is_filled": o.is_filled,
+                            "is_cancelled": o.is_cancelled,
+                            "original_quantity": o.original_quantity,
+                            "assigned_quantity": o.assigned_quantity,
+                            "cancel_quantity": o.cancel_quantity,
+                            "quantity": o.assigned_quantity if o.is_filled
+                                        else o.original_quantity,
+                            "average_price": float(o.average_price),
+                            "limit_price": float(o.price),
+                            "amount": amount,
+                            "commission": float(o.commission),
+                            "iva": float(o.iva),
+                            "processed_at": o.process_date.isoformat(),
+                            "cancel_message": o.cancel_message,
+                            "account_legacy_id": acct.legacy_contract_id,
+                            "account_name": acct.name,
                         }
-                        for a in trading_accounts
-                    ],
-                    "orders": all_orders,
-                }
-                write_json(DATA_DIR / "orders.json", orders_payload)
+                        all_orders.append(common)
+                        if o.is_filled:
+                            filled_orders.append(common)
+
+                # Chronological for stable display.
+                all_orders.sort(key=lambda o: o["processed_at"])
+                filled_orders.sort(key=lambda o: o["processed_at"])
+
+                accounts_meta = [
+                    {
+                        "legacy_contract_id": a.legacy_contract_id,
+                        "name": a.name,
+                    }
+                    for a in trading_accounts
+                ]
+                # Filled-only (Movimientos page) for backward compat.
+                write_json(
+                    DATA_DIR / "orders.json",
+                    {
+                        "from_date": from_date_.isoformat(),
+                        "to_date": to_date_.isoformat(),
+                        "accounts": accounts_meta,
+                        "orders": filled_orders,
+                    },
+                )
+                # All statuses (Histórico page).
+                write_json(
+                    DATA_DIR / "orders_all.json",
+                    {
+                        "from_date": from_date_.isoformat(),
+                        "to_date": to_date_.isoformat(),
+                        "accounts": accounts_meta,
+                        "orders": all_orders,
+                    },
+                )
             else:
                 print("  no trading accounts → skipping orders download.")
 
