@@ -493,10 +493,14 @@ let state = {
 // ----------------------------------------------------------------------
 async function load() {
   try {
+    // cache: 'no-store' is belt-and-suspenders with the server's
+    // Cache-Control: no-store header. After Update, we re-call load()
+    // (instead of location.reload) so the user never has to hard refresh.
+    const opts = { cache: "no-store" };
     const [accounts, positionsByAccount, lastUpdate] = await Promise.all([
-      fetch("/DATA/accounts.json").then(r => r.json()),
-      fetch("/DATA/positions.json").then(r => r.json()).catch(() => ({})),
-      fetch("/DATA/last_update.date").then(r => r.text()).catch(() => ""),
+      fetch("/DATA/accounts.json", opts).then(r => r.json()),
+      fetch("/DATA/positions.json", opts).then(r => r.json()).catch(() => ({})),
+      fetch("/DATA/last_update.date", opts).then(r => r.text()).catch(() => ""),
     ]);
     state.accounts = accounts;
     state.positionsByAccount = positionsByAccount;
@@ -759,7 +763,13 @@ async function triggerUpdate(totpCode = null) {
 
   if (res.ok && payload.status === "ok") {
     closeModal();
-    location.reload();
+    // Re-fetch the JSON files (bypass cache) and re-render in place.
+    // We deliberately don't call location.reload() because a hard reload
+    // can still hit a cached HTML and feel jarring.
+    btn.textContent = "⟳ Refrescando vista...";
+    await load();
+    btn.disabled = false;
+    btn.textContent = "⟳ Update";
     return;
   }
 
