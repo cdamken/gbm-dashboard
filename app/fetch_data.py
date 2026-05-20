@@ -238,6 +238,17 @@ def main() -> None:
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S\n"), encoding="utf-8"
             )
 
+    except AuthError as e:
+        # The saved session was rejected (token revoked or expired earlier
+        # than expected). Wipe it and tell the caller MFA is required so the
+        # browser opens the TOTP modal automatically.
+        session_path = Path.home() / ".gbm-mx" / "session.json"
+        try:
+            session_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        sys.stderr.write(f"Saved session rejected by GBM ({e}). Removed.\n")
+        sys.exit(10)  # mfa_required
     except ApiError as e:
         sys.stderr.write(f"API error: {e}\n")
         sys.exit(20)
