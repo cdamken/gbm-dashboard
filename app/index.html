@@ -257,7 +257,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 <div class="subtitle">
   <span id="contract-label">Contrato: cargando...</span> · Última actualización:
   <span id="last-update">—</span>
-  <button class="update-btn" id="update-btn" onclick="triggerUpdate()">⟳ Update</button>
+  <button class="update-btn" id="update-btn" onclick="triggerUpdate()">⟳ Actualizar</button>
   <button class="settings-btn" id="settings-btn" onclick="openConfigModal()" title="Configurar credenciales">⚙ Cuenta</button>
 </div>
 
@@ -366,7 +366,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </table>
 
 <div class="disclaimer">
-  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5.2</span> · datos vía
+  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5.3</span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
   No afiliado con Grupo Bursátil Mexicano.
@@ -539,7 +539,7 @@ async function load() {
       document.getElementById("error-box").innerHTML =
         `<div class="warning">
           <b>Aún no hay datos descargados.</b>
-          Dale <b>⟳ Update</b> arriba para autenticar con GBM y bajar tu portafolio
+          Dale <b>⟳ Actualizar</b> arriba para autenticar con GBM y bajar tu portafolio
           por primera vez. Te pedirá el código de tu app autenticadora.
         </div>`;
       // Render an empty state so the page doesn't look broken.
@@ -952,7 +952,7 @@ async function triggerUpdate(totpCode = null) {
     });
   } catch (err) {
     btn.disabled = false;
-    btn.textContent = "⟳ Update";
+    btn.textContent = "⟳ Actualizar";
     alert("No se pudo conectar al server.\nDetalle: " + err.message);
     return;
   }
@@ -968,13 +968,13 @@ async function triggerUpdate(totpCode = null) {
     btn.textContent = "⟳ Refrescando vista...";
     await load();
     btn.disabled = false;
-    btn.textContent = "⟳ Update";
+    btn.textContent = "⟳ Actualizar";
     return;
   }
 
   // Handle the documented error statuses from the server.
   btn.disabled = false;
-  btn.textContent = "⟳ Update";
+  btn.textContent = "⟳ Actualizar";
 
   if (payload.status === "mfa_required") {
     openModal();

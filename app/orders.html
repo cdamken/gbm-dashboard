@@ -262,7 +262,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </table>
 
 <div class="disclaimer">
-  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5.2</span> · datos vía
+  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5.3</span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
   Solo se muestran órdenes con estatus <b>Llena</b> de las cuentas tipo trading.
@@ -348,7 +348,7 @@ async function load() {
       document.getElementById("error-box").innerHTML =
         `<div class="error"><b>No hay datos de movimientos todavía.</b><br>
          Ve a <a href="/app/index.html" style="color: var(--blue);">Portafolio</a>
-         y dale ⟳ Update — se descargarán las órdenes de los últimos 90 días.</div>`;
+         y dale ⟳ Actualizar — se descargarán las órdenes de los últimos 90 días.</div>`;
       return;
     }
     state.orders = data.orders || [];
