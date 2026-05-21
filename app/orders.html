@@ -262,7 +262,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </table>
 
 <div class="disclaimer">
-  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5.3</span> · datos vía
+  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5.4</span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
   Solo se muestran órdenes con estatus <b>Llena</b> de las cuentas tipo trading.
@@ -340,8 +340,13 @@ async function load() {
     const safeText = (url) =>
       fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
 
-    const [data, lastUpdate] = await Promise.all([
+    // Also fetch positions.json so we can synthesize Trading USA holdings
+    // into the Top emisoras section. GBM's api.trading-usa.gbm.com orders
+    // endpoint is unreliable (503 frequently), so we derive cost basis
+    // from the position snapshot (average_cost / quantity) instead.
+    const [data, positions, lastUpdate] = await Promise.all([
       safeJson("/DATA/orders.json"),
+      safeJson("/DATA/positions.json"),
       safeText("/DATA/last_update.date"),
     ]);
     if (!data) {
@@ -352,6 +357,7 @@ async function load() {
       return;
     }
     state.orders = data.orders || [];
+    state.positionsByAccount = positions || {};
     state.fromDate = data.from_date;
     state.toDate = data.to_date;
     // v0.4.3+ ships orders from multiple accounts; older payloads had a
@@ -469,12 +475,34 @@ function renderMonths() {
 
 function renderTickers() {
   const byTicker = {};
+  // From orders: precise count per ticker.
   for (const o of state.orders) {
     if (o.side !== "BUY") continue;  // ranking by amount invested
-    if (!byTicker[o.issue_id]) byTicker[o.issue_id] = { count: 0, qty: 0, amount: 0 };
+    if (!byTicker[o.issue_id]) {
+      byTicker[o.issue_id] = { count: 0, qty: 0, amount: 0, source: "orders" };
+    }
     byTicker[o.issue_id].count++;
     byTicker[o.issue_id].qty += o.quantity;
     byTicker[o.issue_id].amount += o.amount;
+  }
+  // From positions: Trading USA fractional shares (DRAM, EWY, etc.) that
+  // live in mercado_extranjero and don't show up in orders.json because
+  // their backend (api.trading-usa.gbm.com) is unreliable. We derive the
+  // invested amount from average_cost — losing per-order granularity but
+  // gaining the total picture. These rows are marked with source: "usa".
+  for (const legacy of Object.keys(state.positionsByAccount)) {
+    const acct = state.positionsByAccount[legacy];
+    if (!acct) continue;
+    for (const p of (acct.mercado_extranjero || [])) {
+      if (!p || p.issue_id === "Subtotal") continue;
+      if (byTicker[p.issue_id]) continue;  // already in orders
+      byTicker[p.issue_id] = {
+        count: null,  // unknown
+        qty: Number(p.quantity) || 0,
+        amount: Number(p.average_cost) || 0,
+        source: "usa",
+      };
+    }
   }
   const rows = Object.entries(byTicker)
     .map(([t, v]) => ({
@@ -483,17 +511,27 @@ function renderTickers() {
       qty: v.qty,
       amount: v.amount,
       avg: v.qty ? v.amount / v.qty : 0,
+      source: v.source,
     }))
     .sort((a, b) => b.amount - a.amount)
-    .slice(0, 15);
+    .slice(0, 20);
 
-  document.getElementById("tickers-tbody").innerHTML = rows.map(r => `<tr>
-    <td class="ticker">${r.issue_id}</td>
-    <td class="num">${r.count}</td>
-    <td class="num">${fmtMoney(r.qty, { decimals: r.qty % 1 === 0 ? 0 : 4 })}</td>
-    <td class="num">${fmtMoney(r.amount, { currency: true })}</td>
-    <td class="num">${fmtMoney(r.avg)}</td>
-  </tr>`).join("") || `<tr><td colspan="5" class="empty">Sin datos</td></tr>`;
+  document.getElementById("tickers-tbody").innerHTML = rows.map(r => {
+    const usaNote = r.source === "usa"
+      ? `<span title="Derivado de la posición actual de Trading USA — el endpoint de órdenes USA no está disponible." style="margin-left:6px; font-size: 9px; color: var(--amber); border: 1px solid var(--amber); padding: 1px 5px; border-radius: 8px;">USA</span>`
+      : "";
+    const countCell = r.count == null
+      ? `<span class="muted" title="Las órdenes individuales no están disponibles para Trading USA">—</span>`
+      : r.count;
+    const qtyDec = (r.qty % 1 === 0) ? 0 : 4;
+    return `<tr>
+      <td class="ticker">${r.issue_id}${usaNote}</td>
+      <td class="num">${countCell}</td>
+      <td class="num">${fmtMoney(r.qty, { decimals: qtyDec })}</td>
+      <td class="num">${fmtMoney(r.amount, { currency: true })}</td>
+      <td class="num">${fmtMoney(r.avg)}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="5" class="empty">Sin datos</td></tr>`;
 }
 
 function setSort(key) {
