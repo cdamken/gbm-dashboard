@@ -260,26 +260,20 @@ tr:hover { background: rgba(255,255,255,0.02); }
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   text-align: center;
 }
-.progress-box h2 { font-size: 20px; margin-bottom: 8px; }
-.progress-box p { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.progress-box h2 { font-size: 22px; margin-bottom: 12px; }
+.progress-box .progress-stage {
+  color: var(--text); font-size: 15px; margin-bottom: 8px; min-height: 22px;
+  transition: opacity 0.2s;
+}
+.progress-box .progress-hint {
+  color: var(--muted); font-size: 12px; line-height: 1.5;
+}
 .spinner {
-  width: 48px; height: 48px; margin: 12px auto 20px;
+  width: 56px; height: 56px; margin: 8px auto 24px;
   border: 4px solid var(--border); border-top-color: var(--blue);
   border-radius: 50%; animation: spin 0.9s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.progress-elapsed {
-  font-size: 12px; color: var(--muted); margin-top: 14px;
-  font-variant-numeric: tabular-nums;
-}
-.progress-log {
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px 16px; margin-top: 16px;
-  font-family: 'SF Mono', Menlo, monospace; font-size: 11px;
-  color: var(--muted); text-align: left;
-  max-height: 160px; overflow-y: auto; white-space: pre-wrap;
-}
-.progress-log .latest { color: var(--text); }
 </style>
 </head>
 <body>
@@ -400,7 +394,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </table>
 
 <div class="disclaimer">
-  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.6.1</span> · datos vía
+  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.6.2</span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
   No afiliado con Grupo Bursátil Mexicano.
@@ -481,13 +475,11 @@ tr:hover { background: rgba(255,255,255,0.02); }
 <div class="progress-overlay" id="progress-overlay">
   <div class="progress-box">
     <div class="spinner"></div>
-    <h2 id="progress-title">Descargando datos de GBM</h2>
-    <p id="progress-subtitle">
-      Esto puede tardar 1–3 minutos. Iteramos día por día por cada cuenta —
-      no cierres la pestaña.
-    </p>
-    <div class="progress-log" id="progress-log">Iniciando...</div>
-    <div class="progress-elapsed" id="progress-elapsed">⏱  0s</div>
+    <h2>Actualizando tu portafolio</h2>
+    <div class="progress-stage" id="progress-stage">Conectando con GBM…</div>
+    <div class="progress-hint">
+      Esto puede tardar un par de minutos. Por favor, no cierres la pestaña.
+    </div>
   </div>
 </div>
 
@@ -1220,51 +1212,48 @@ function submitTotp() {
 
 // ----------------------------------------------------------------------
 // Progress overlay (shown during /update fetches)
+// Spanish, friendly, no technical noise. The stage message changes
+// based on elapsed time so the user knows things are still happening.
 // ----------------------------------------------------------------------
+const PROGRESS_STAGES = [
+  { until: 3,    text: "Conectando con GBM…" },
+  { until: 12,   text: "Descargando tu portafolio…" },
+  { until: 45,   text: "Descargando posiciones…" },
+  { until: 120,  text: "Descargando historial de operaciones…" },
+  { until: 180,  text: "Ya casi terminamos…" },
+  { until: Infinity, text: "Sigue trabajando, espera un poco más…" },
+];
+
+let _progressStartedAt = null;
+
 function showProgressOverlay() {
   document.getElementById("progress-overlay").classList.add("show");
-  document.getElementById("progress-log").textContent = "Iniciando...";
-  document.getElementById("progress-elapsed").textContent = "⏱  0s";
+  document.getElementById("progress-stage").textContent = PROGRESS_STAGES[0].text;
+  _progressStartedAt = Date.now();
 }
 
 function hideProgressOverlay() {
   document.getElementById("progress-overlay").classList.remove("show");
+  _progressStartedAt = null;
 }
 
 function startProgressPolling() {
-  // Poll /progress every 1.2s, render the last lines in the overlay.
-  const render = async () => {
-    try {
-      const r = await fetch("/progress", { cache: "no-store" });
-      if (!r.ok) return;
-      const p = await r.json();
-      const lines = (p.log || "").trimEnd().split("\n").slice(-8);
-      const html = lines.map((l, i) =>
-        i === lines.length - 1
-          ? `<div class="latest">${escapeHtml(l)}</div>`
-          : `<div>${escapeHtml(l)}</div>`
-      ).join("");
-      document.getElementById("progress-log").innerHTML = html || "Iniciando...";
-      const log = document.getElementById("progress-log");
-      log.scrollTop = log.scrollHeight;
-      if (p.elapsed_s != null) {
-        document.getElementById("progress-elapsed").textContent =
-          `⏱  ${Math.floor(p.elapsed_s)}s`;
-      }
-    } catch (_) { /* swallow — keep polling */ }
+  // We don't pull the technical log anymore — we just rotate friendly
+  // Spanish messages based on how long the fetch has been running.
+  const updateStage = () => {
+    if (_progressStartedAt == null) return;
+    const elapsed = (Date.now() - _progressStartedAt) / 1000;
+    const stage = PROGRESS_STAGES.find(s => elapsed < s.until)
+                  || PROGRESS_STAGES[PROGRESS_STAGES.length - 1];
+    const el = document.getElementById("progress-stage");
+    if (el.textContent !== stage.text) el.textContent = stage.text;
   };
-  render();
-  return setInterval(render, 1200);
+  updateStage();
+  return setInterval(updateStage, 1000);
 }
 
 function stopProgressPolling(timer) {
   if (timer != null) clearInterval(timer);
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 // Close any open modal with Escape.
