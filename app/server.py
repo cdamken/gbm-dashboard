@@ -22,6 +22,8 @@ import os
 import socketserver
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 PORT = 8086
@@ -30,6 +32,11 @@ APP_DIR = PROJECT_DIR / "app"
 ENV_FILE = APP_DIR / ".env"
 VENV_PY = APP_DIR / ".venv" / "bin" / "python"
 FETCH_SCRIPT = APP_DIR / "fetch_data.py"
+DATA_DIR = PROJECT_DIR / "DATA"
+PROGRESS_FILE = DATA_DIR / "update_progress.log"
+PROGRESS_LOCK = threading.Lock()
+# Tracks whether an update is currently running so /progress can tell.
+UPDATE_STATE: dict[str, object] = {"running": False, "started_at": None}
 
 # Map fetch_data.py exit codes to (HTTP status, JSON status string).
 EXIT_CODE_MAP = {
@@ -152,6 +159,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             email = env.get("GBM_EMAIL", "") if configured else None
             self._json(200, {"configured": configured, "email": email})
             return
+        if self.path == "/progress":
+            text = ""
+            if PROGRESS_FILE.exists():
+                try:
+                    text = PROGRESS_FILE.read_text(encoding="utf-8")[-4000:]
+                except OSError:
+                    text = ""
+            elapsed = None
+            with PROGRESS_LOCK:
+                running = bool(UPDATE_STATE["running"])
+                started = UPDATE_STATE["started_at"]
+            if running and started:
+                elapsed = round(time.time() - float(started), 1)
+            self._json(200, {"running": running, "elapsed_s": elapsed, "log": text})
+            return
         super().do_GET()
 
     # ------------------------------------------------------------------
@@ -222,24 +244,77 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
 
         py = str(VENV_PY) if VENV_PY.exists() else sys.executable
-        cmd = [py, str(FETCH_SCRIPT), "--non-interactive"]
+        cmd = [py, "-u", str(FETCH_SCRIPT), "--non-interactive"]
         if totp_code:
             cmd += ["--totp", totp_code]
 
+        # Reset the progress file so the frontend can poll it live.
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with PROGRESS_LOCK:
+            PROGRESS_FILE.write_text("Iniciando descarga...\n", encoding="utf-8")
+            UPDATE_STATE["running"] = True
+            UPDATE_STATE["started_at"] = time.time()
+
+        captured_stderr: list[str] = []
+
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-        except subprocess.TimeoutExpired:
-            self._json(504, {"status": "timeout", "detail": "fetch_data.py > 180s"})
-            return
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,  # line-buffered
+            )
         except Exception as e:
+            with PROGRESS_LOCK:
+                UPDATE_STATE["running"] = False
             self._json(500, {"status": "error", "detail": str(e)})
             return
 
-        http_status, json_status = EXIT_CODE_MAP.get(result.returncode, (500, "error"))
-        last_stderr_line = (result.stderr.strip().splitlines() or [""])[-1][:200]
+        # Reader thread: append every stdout line to the progress file so
+        # the frontend can show it in real time. The TOTP code (if any)
+        # never appears in stdout — fetch_data.py only prints structural
+        # messages ("contract: EP47NC", "Personal: 32 orders", etc.).
+        def _drain_stdout():
+            try:
+                with PROGRESS_FILE.open("a", encoding="utf-8") as f:
+                    for line in proc.stdout:  # type: ignore[union-attr]
+                        f.write(line)
+                        f.flush()
+            except Exception:
+                pass
+
+        def _drain_stderr():
+            try:
+                for line in proc.stderr:  # type: ignore[union-attr]
+                    captured_stderr.append(line)
+            except Exception:
+                pass
+
+        t_out = threading.Thread(target=_drain_stdout, daemon=True)
+        t_err = threading.Thread(target=_drain_stderr, daemon=True)
+        t_out.start()
+        t_err.start()
+
+        try:
+            return_code = proc.wait(timeout=600)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            with PROGRESS_LOCK:
+                UPDATE_STATE["running"] = False
+            self._json(504, {"status": "timeout", "detail": "fetch_data.py > 600s"})
+            return
+        t_out.join(timeout=2)
+        t_err.join(timeout=2)
+
+        with PROGRESS_LOCK:
+            UPDATE_STATE["running"] = False
+
+        http_status, json_status = EXIT_CODE_MAP.get(return_code, (500, "error"))
+        last_stderr_line = ("".join(captured_stderr).strip().splitlines() or [""])[-1][:200]
         payload = {"status": json_status}
         if http_status == 200:
-            payload["output"] = result.stdout[-2000:]
+            payload["output"] = PROGRESS_FILE.read_text(encoding="utf-8")[-2000:]
         else:
             payload["detail"] = last_stderr_line
         self._json(http_status, payload)
