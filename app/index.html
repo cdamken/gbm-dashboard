@@ -366,7 +366,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </table>
 
 <div class="disclaimer">
-  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5.1</span> · datos vía
+  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5.2</span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
   No afiliado con Grupo Bursátil Mexicano.
@@ -592,15 +592,44 @@ function flattenPositions(posData, account) {
 // ----------------------------------------------------------------------
 // Aggregates computed live from accounts + positions
 // ----------------------------------------------------------------------
+// Per-account value: prefer sum(market_value) of positions when available
+// (most accurate, matches what GBM web shows); fall back to
+// accounts.position.amount when there's no detailed position data yet.
+function accountValue(account) {
+  // Include ALL sections including efectivo so the total matches GBM's
+  // own breakdown. positionsFlat only carries the equity-like sections,
+  // so for efectivo we have to look into the raw positions blob.
+  const acctPositions = state.positionsByAccount?.[account.legacy_contract_id];
+  if (acctPositions) {
+    let total = 0;
+    for (const sk of [
+      "mercados_globales_sic", "mercado_capitales",
+      "sociedades_inversion_deuda", "sociedades_inversion_comun",
+      "mercado_extranjero", "efectivo",
+    ]) {
+      const items = acctPositions[sk] || [];
+      for (const p of items) {
+        if (p.issue_id === "Subtotal") continue;
+        total += Number(p.market_value) || 0;
+      }
+    }
+    if (total !== 0) return total;
+  }
+  return account.position?.amount || 0;
+}
+
 function aggregates() {
-  // Account market values come from /v2/.../accounts — that's the only
-  // place that includes cash and short-term positions correctly.
+  // Total value = sum of each account's value (using positions where
+  // available — see accountValue() for why). This matches the total
+  // shown in GBM's web app, unlike /v2/.../accounts which can
+  // misreport accounts holding cross-border positions (e.g. SIC inside
+  // a BMV account).
   const totalValue = state.accounts.reduce(
-    (s, a) => s + (a.position?.amount || 0), 0
+    (s, a) => s + accountValue(a), 0
   );
-  // P&L: use the historical yield from positions (sum of yield_value),
-  // NOT accounts.plus_minus.amount which is intraday-only and reports
-  // 0 for accounts whose market is closed (e.g. Trading USA at night).
+  // P&L: historical yield from positions, NOT accounts.plus_minus
+  // which is intraday-only and reports 0 for accounts whose market is
+  // closed (e.g. Trading USA at night).
   const totalPnL = state.positionsFlat.reduce(
     (s, p) => s + (Number(p.yield_value) || 0), 0
   );
@@ -608,8 +637,6 @@ function aggregates() {
     (s, p) => s + (Number(p.average_cost) || 0), 0
   );
   const totalPnLPct = totalCost > 0 ? totalPnL / totalCost : 0;
-  // Count UNIQUE tickers across all accounts (a ticker held in 3 accounts
-  // counts as 1 position, not 3).
   const numPositions = new Set(state.positionsFlat.map(p => p.issue_id)).size;
   return { totalValue, totalPnL, totalPnLPct, numPositions };
 }
@@ -697,7 +724,7 @@ function renderAccounts() {
   grid.innerHTML = state.accounts.map(a => {
     const type = ACCOUNT_TYPES[a.management_type_template]
       || { label: a.management_type_template, color: "muted" };
-    const value = a.position?.amount;
+    const value = accountValue(a);
     const { amount: pnl, percentage: pnlPct } = accountPnL(a);
     const posCount = state.positionsFlat.filter(
       p => p._account_legacy_id === a.legacy_contract_id
