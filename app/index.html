@@ -366,7 +366,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </table>
 
 <div class="disclaimer">
-  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5</span> · datos vía
+  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.5.1</span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
   No afiliado con Grupo Bursátil Mexicano.
@@ -593,18 +593,46 @@ function flattenPositions(posData, account) {
 // Aggregates computed live from accounts + positions
 // ----------------------------------------------------------------------
 function aggregates() {
+  // Account market values come from /v2/.../accounts — that's the only
+  // place that includes cash and short-term positions correctly.
   const totalValue = state.accounts.reduce(
     (s, a) => s + (a.position?.amount || 0), 0
   );
-  const totalPnL = state.accounts.reduce(
-    (s, a) => s + (a.plus_minus?.amount || 0), 0
+  // P&L: use the historical yield from positions (sum of yield_value),
+  // NOT accounts.plus_minus.amount which is intraday-only and reports
+  // 0 for accounts whose market is closed (e.g. Trading USA at night).
+  const totalPnL = state.positionsFlat.reduce(
+    (s, p) => s + (Number(p.yield_value) || 0), 0
   );
-  const principal = totalValue - totalPnL;
-  const totalPnLPct = principal !== 0 ? totalPnL / principal : 0;
+  const totalCost = state.positionsFlat.reduce(
+    (s, p) => s + (Number(p.average_cost) || 0), 0
+  );
+  const totalPnLPct = totalCost > 0 ? totalPnL / totalCost : 0;
   // Count UNIQUE tickers across all accounts (a ticker held in 3 accounts
   // counts as 1 position, not 3).
   const numPositions = new Set(state.positionsFlat.map(p => p.issue_id)).size;
   return { totalValue, totalPnL, totalPnLPct, numPositions };
+}
+
+// Per-account P&L computed from positions (historical, not intraday).
+// Falls back to accounts.plus_minus when the account has no detailed
+// positions (e.g. Smart Cash at zero, or before the first fetch).
+function accountPnL(account) {
+  const positions = state.positionsFlat.filter(
+    p => p._account_legacy_id === account.legacy_contract_id
+  );
+  if (positions.length === 0) {
+    return {
+      amount: account.plus_minus?.amount ?? null,
+      percentage: account.plus_minus_percentage ?? null,
+    };
+  }
+  const yieldSum = positions.reduce((s, p) => s + (Number(p.yield_value) || 0), 0);
+  const costSum = positions.reduce((s, p) => s + (Number(p.average_cost) || 0), 0);
+  return {
+    amount: yieldSum,
+    percentage: costSum > 0 ? yieldSum / costSum : null,
+  };
 }
 
 // ----------------------------------------------------------------------
@@ -670,8 +698,7 @@ function renderAccounts() {
     const type = ACCOUNT_TYPES[a.management_type_template]
       || { label: a.management_type_template, color: "muted" };
     const value = a.position?.amount;
-    const pnl = a.plus_minus?.amount;
-    const pnlPct = a.plus_minus_percentage;
+    const { amount: pnl, percentage: pnlPct } = accountPnL(a);
     const posCount = state.positionsFlat.filter(
       p => p._account_legacy_id === a.legacy_contract_id
     ).length;
