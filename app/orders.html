@@ -262,7 +262,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </table>
 
 <div class="disclaimer">
-  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.6.0</span> · datos vía
+  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.6.1</span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
   Solo se muestran órdenes con estatus <b>Llena</b> de las cuentas tipo trading.
@@ -514,7 +514,7 @@ function renderTickers() {
       source: v.source,
     }))
     .sort((a, b) => b.amount - a.amount)
-    .slice(0, 20);
+    .slice(0, 5);
 
   document.getElementById("tickers-tbody").innerHTML = rows.map(r => {
     const usaNote = r.source === "usa"

@@ -400,7 +400,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </table>
 
 <div class="disclaimer">
-  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.6.0</span> · datos vía
+  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.6.1</span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
   No afiliado con Grupo Bursátil Mexicano.
@@ -989,11 +989,38 @@ function renderTable() {
 async function triggerUpdate(totpCode = null) {
   const btn = document.getElementById("update-btn");
   btn.disabled = true;
-  btn.textContent = totpCode ? "⟳ Verificando código..." : "⟳ Actualizando...";
+  btn.textContent = totpCode ? "⟳ Verificando código..." : "⟳ Conectando...";
 
-  // Show the fullscreen progress overlay and start polling.
-  showProgressOverlay();
-  const pollTimer = startProgressPolling();
+  // Defer the heavy overlay: the first call (no TOTP) might immediately
+  // come back with mfa_required, in which case we don't want to flash
+  // the overlay before opening the TOTP modal. When a TOTP code IS
+  // present we already know the fetch will run for minutes, so show
+  // the overlay right away.
+  let overlayShown = false;
+  let pollTimer = null;
+  const startOverlay = () => {
+    if (overlayShown) return;
+    overlayShown = true;
+    showProgressOverlay();
+    pollTimer = startProgressPolling();
+    btn.textContent = "⟳ Actualizando...";
+  };
+  const stopOverlay = () => {
+    if (overlayTimer) clearTimeout(overlayTimer);
+    if (pollTimer) {
+      stopProgressPolling(pollTimer);
+      pollTimer = null;
+    }
+    if (overlayShown) {
+      hideProgressOverlay();
+      overlayShown = false;
+    }
+  };
+  // 0 ms delay when the user just typed a TOTP — the fetch WILL be slow.
+  // 700 ms when this is the first probe — quick responses (mfa_required,
+  // bad credentials) get to dismiss before the overlay even appears.
+  const overlayDelay = totpCode != null ? 0 : 700;
+  const overlayTimer = setTimeout(startOverlay, overlayDelay);
 
   let res;
   try {
@@ -1003,17 +1030,15 @@ async function triggerUpdate(totpCode = null) {
       body: JSON.stringify(totpCode ? { totp_code: totpCode } : {}),
     });
   } catch (err) {
-    stopProgressPolling(pollTimer);
-    hideProgressOverlay();
+    stopOverlay();
     btn.disabled = false;
     btn.textContent = "⟳ Actualizar";
     alert("No se pudo conectar al server.\nDetalle: " + err.message);
     return;
   }
 
-  // Stop the live polling — the request finished, the overlay will close
-  // after rendering or on error below.
-  stopProgressPolling(pollTimer);
+  clearTimeout(overlayTimer);
+  if (pollTimer) stopProgressPolling(pollTimer);
 
   let payload = {};
   try { payload = await res.json(); } catch (_) {}
@@ -1022,14 +1047,14 @@ async function triggerUpdate(totpCode = null) {
     closeModal();
     btn.textContent = "⟳ Refrescando vista...";
     await load();
-    hideProgressOverlay();
+    stopOverlay();
     btn.disabled = false;
     btn.textContent = "⟳ Actualizar";
     return;
   }
 
   // Handle the documented error statuses from the server.
-  hideProgressOverlay();
+  stopOverlay();
   btn.disabled = false;
   btn.textContent = "⟳ Actualizar";
 
