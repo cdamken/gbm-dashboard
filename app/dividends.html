@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>GBM Dividendos</title>
+<style>
+:root {
+  --bg: #0f1419;
+  --card: #1a1f2e;
+  --border: #2a3142;
+  --text: #e8eef5;
+  --muted: #7a8599;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+  --purple: #c084fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5;
+}
+
+h1 {
+  font-size: 28px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 12px; font-weight: 700;
+}
+.logo-box {
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  width: 44px; height: 44px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: white;
+}
+
+.subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+
+.nav { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+.nav a {
+  color: var(--muted); text-decoration: none; font-size: 14px;
+  padding: 8px 18px; border-radius: 8px; font-weight: 500;
+  border: 1px solid var(--border); transition: all 0.15s;
+}
+.nav a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.nav a.active {
+  background: var(--blue); color: var(--bg); border-color: var(--blue); font-weight: 600;
+}
+
+.cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px; margin-bottom: 32px;
+}
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px;
+}
+.card .label {
+  color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: 8px;
+}
+.card .value { font-size: 26px; font-weight: 700; }
+.card .delta { font-size: 12px; margin-top: 4px; color: var(--muted); }
+
+.green { color: var(--green); }
+.red { color: var(--red); }
+.amber { color: var(--amber); }
+.blue { color: var(--blue); }
+.muted { color: var(--muted); }
+
+.section {
+  margin: 32px 0 16px; font-size: 18px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+.badge {
+  background: var(--border); color: var(--muted); font-size: 12px;
+  padding: 3px 10px; border-radius: 12px; font-weight: 500;
+}
+
+.controls {
+  display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.controls input, .controls select {
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px;
+}
+.controls input { min-width: 220px; }
+
+table {
+  width: 100%; border-collapse: collapse; background: var(--card);
+  border-radius: 12px; overflow: hidden; margin-bottom: 12px;
+}
+th, td {
+  text-align: left; padding: 12px 14px; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  background: rgba(255,255,255,0.03); color: var(--muted);
+  font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap;
+}
+th:hover { color: var(--text); }
+tr:hover { background: rgba(255,255,255,0.02); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ticker { font-family: monospace; font-weight: 600; }
+.tx-id { font-family: monospace; color: var(--muted); font-size: 11px; }
+
+.kind-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 700;
+}
+.kind-payout { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.kind-tax    { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+.kind-other  { background: rgba(251, 191, 36, 0.15); color: var(--amber); }
+
+.empty {
+  text-align: center; padding: 40px; color: var(--muted); font-size: 14px;
+}
+.error {
+  background: rgba(248, 113, 113, 0.1); border-left: 4px solid var(--red);
+  padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px;
+}
+.warning {
+  background: rgba(251, 191, 36, 0.1); border-left: 4px solid var(--amber);
+  padding: 14px 18px; border-radius: 8px; margin: 16px 0; font-size: 13px;
+}
+
+.disclaimer {
+  margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; line-height: 1.6;
+}
+.disclaimer a { color: var(--blue); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<h1>
+  <div class="logo-box">GBM</div>
+  Dividendos
+</h1>
+<div class="subtitle">
+  <span id="range-label">Rango: cargando...</span> ·
+  Última actualización: <span id="last-update">—</span>
+</div>
+
+<div class="nav">
+  <a href="/app/index.html">📊 Portafolio</a>
+  <a href="/app/orders.html">📋 Órdenes</a>
+  <a href="/app/dividends.html" class="active">💰 Dividendos</a>
+  <a href="/app/transactions.html">📒 Libro Diario</a>
+</div>
+
+<div id="error-box"></div>
+
+<!-- ---------- summary cards ---------- -->
+<div class="cards">
+  <div class="card">
+    <div class="label">Total recibido (neto)</div>
+    <div class="value green" id="total-net">—</div>
+    <div class="delta" id="total-detail">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Bruto</div>
+    <div class="value" id="total-gross">—</div>
+    <div class="delta">antes de impuestos</div>
+  </div>
+  <div class="card">
+    <div class="label">ISR retenido</div>
+    <div class="value red" id="total-tax">—</div>
+    <div class="delta">retenciones cedulares</div>
+  </div>
+  <div class="card">
+    <div class="label">Emisoras pagadoras</div>
+    <div class="value" id="num-issuers">—</div>
+    <div class="delta" id="num-events">—</div>
+  </div>
+</div>
+
+<!-- ---------- filters ---------- -->
+<div class="section">
+  <span>Detalle de dividendos</span>
+  <span class="badge" id="rows-count">—</span>
+</div>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="Buscar emisora o descripción..." oninput="renderTable()">
+  <select id="kind-filter" onchange="renderTable()">
+    <option value="">Todos los movimientos</option>
+    <option value="payout">Solo abonos (efectivo)</option>
+    <option value="tax">Solo ISR retenido</option>
+  </select>
+  <select id="month-filter" onchange="renderTable()">
+    <option value="">Todos los meses</option>
+  </select>
+  <select id="ticker-filter" onchange="renderTable()">
+    <option value="">Todas las emisoras</option>
+  </select>
+  <span id="account-filter-wrap" style="display: none;">
+    <select id="account-filter" onchange="renderTable()">
+      <option value="">Todas las cuentas</option>
+    </select>
+  </span>
+</div>
+
+<table id="dividends-table">
+  <thead>
+    <tr>
+      <th onclick="setSort('process_date')">Fecha</th>
+      <th onclick="setSort('security_id')">Emisora</th>
+      <th>Descripción</th>
+      <th onclick="setSort('account_name')">Cuenta</th>
+      <th>Tipo</th>
+      <th class="num" onclick="setSort('amount')">Bruto</th>
+      <th class="num" onclick="setSort('net_amount')">Neto</th>
+      <th>ID</th>
+    </tr>
+  </thead>
+  <tbody id="dividends-tbody"></tbody>
+</table>
+
+<div class="disclaimer">
+  Dashboard no oficial · <span style="font-family: monospace;" data-version></span> · datos vía
+  <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
+  Esta página muestra los movimientos que GBM clasifica como dividendos
+  en tu portafolio: pagos en efectivo, reembolsos de capital, resultados
+  fiscales distribuidos y las retenciones de ISR cedular correspondientes.
+</div>
+
+<script src="/app/_shared.js"></script>
+<script>
+// Classify a row into payout vs tax vs other.
+// The server already sets is_withholding for ISR rows; this just
+// makes the display logic readable.
+function classify(d) {
+  if (d.is_withholding) return "tax";
+  const desc = (d.description || "").toLowerCase();
+  if (desc.includes("abono") || desc.includes("dividendo") || desc.includes("reembolso"))
+    return "payout";
+  return "other";
+}
+
+let state = {
+  rows: [],
+  accounts: [],
+  fromDate: null,
+  toDate: null,
+  sortKey: "process_date",
+  sortDir: "desc",
+};
+
+async function load() {
+  try {
+    const opts = { cache: "no-store" };
+    const safeJson = (url) =>
+      fetch(url, opts).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const safeText = (url) =>
+      fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
+    const [data, lastUpdate] = await Promise.all([
+      safeJson("/DATA/dividends.json"),
+      safeText("/DATA/last_update.date"),
+    ]);
+    if (!data) {
+      document.getElementById("error-box").innerHTML =
+        `<div class="warning">
+          <b>Aún no hay datos de dividendos.</b>
+          Ve a <a href="/app/index.html" style="color: var(--blue);">📊 Portafolio</a>
+          y dale <b>⟳ Actualizar</b> para descargar tus movimientos del último año.
+        </div>`;
+      return;
+    }
+    state.rows = data.dividends || [];
+    state.fromDate = data.from_date;
+    state.toDate = data.to_date;
+
+    document.getElementById("range-label").textContent =
+      `Rango: ${state.fromDate} → ${state.toDate}`;
+    document.getElementById("last-update").textContent = formatTimestamp(lastUpdate.trim());
+
+    populateFilters();
+    renderCards();
+    renderTable();
+  } catch (err) {
+    document.getElementById("error-box").innerHTML =
+      `<div class="error"><b>Error cargando datos.</b><br>${err.message}</div>`;
+  }
+}
+
+function populateFilters() {
+  const months = [...new Set(state.rows.map(d => monthKey(d.process_date)))].sort().reverse();
+  const monthSel = document.getElementById("month-filter");
+  for (const m of months) {
+    const opt = document.createElement("option");
+    opt.value = m; opt.textContent = monthLabel(m);
+    monthSel.appendChild(opt);
+  }
+  const tickers = [...new Set(state.rows.map(d => d.security_id))].sort();
+  const tickerSel = document.getElementById("ticker-filter");
+  for (const t of tickers) {
+    const opt = document.createElement("option");
+    opt.value = t; opt.textContent = t;
+    tickerSel.appendChild(opt);
+  }
+  const accountsInRows = [...new Set(state.rows.map(d => d.account_legacy_id || ""))].filter(Boolean);
+  if (accountsInRows.length > 1) {
+    document.getElementById("account-filter-wrap").style.display = "";
+    const accSel = document.getElementById("account-filter");
+    for (const id of accountsInRows) {
+      const name = state.rows.find(d => d.account_legacy_id === id)?.account_name || id;
+      const opt = document.createElement("option");
+      opt.value = id; opt.textContent = `${name} (${id})`;
+      accSel.appendChild(opt);
+    }
+  }
+}
+
+function renderCards() {
+  // "Payouts" = positive cash inflows. "Tax" = ISR withholding lines.
+  const payouts = state.rows.filter(d => classify(d) === "payout");
+  const taxes   = state.rows.filter(d => classify(d) === "tax");
+  const gross   = payouts.reduce((s, d) => s + (d.amount || 0), 0);
+  const net     = payouts.reduce((s, d) => s + (d.net_amount || 0), 0);
+  const tax     = taxes.reduce((s, d) => s + (d.amount || 0), 0);
+  // Net actually received (after withholding): payout net minus tax retained.
+  const netReceived = net - tax;
+  const issuers = new Set(payouts.map(d => d.security_id)).size;
+
+  document.getElementById("total-net").textContent = "$" + fmtMoney(netReceived);
+  document.getElementById("total-detail").textContent =
+    `${payouts.length} abono(s) · ${taxes.length} retención(es)`;
+  document.getElementById("total-gross").textContent = "$" + fmtMoney(gross);
+  document.getElementById("total-tax").textContent = "−$" + fmtMoney(tax);
+  document.getElementById("num-issuers").textContent = issuers;
+  document.getElementById("num-events").textContent =
+    `${state.rows.length} movimiento(s) en total`;
+}
+
+function setSort(key) {
+  if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+  else { state.sortKey = key; state.sortDir = "desc"; }
+  renderTable();
+}
+
+function kindPill(d) {
+  const k = classify(d);
+  if (k === "payout") return `<span class="kind-pill kind-payout">Abono</span>`;
+  if (k === "tax")    return `<span class="kind-pill kind-tax">ISR</span>`;
+  return `<span class="kind-pill kind-other">Otro</span>`;
+}
+
+function renderTable() {
+  const search = document.getElementById("search").value.toLowerCase();
+  const kindFilter = document.getElementById("kind-filter").value;
+  const monthFilter = document.getElementById("month-filter").value;
+  const tickerFilter = document.getElementById("ticker-filter").value;
+  const accountFilter = document.getElementById("account-filter").value;
+
+  let rows = state.rows.filter(d => {
+    const blob = (d.security_id + " " + (d.description || "")).toLowerCase();
+    if (search && !blob.includes(search)) return false;
+    if (kindFilter && classify(d) !== kindFilter) return false;
+    if (monthFilter && monthKey(d.process_date) !== monthFilter) return false;
+    if (tickerFilter && d.security_id !== tickerFilter) return false;
+    if (accountFilter && d.account_legacy_id !== accountFilter) return false;
+    return true;
+  });
+
+  rows.sort((a, b) => {
+    const va = a[state.sortKey];
+    const vb = b[state.sortKey];
+    if (typeof va === "string" && typeof vb === "string") {
+      return state.sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+    return state.sortDir === "asc" ? (va - vb) : (vb - va);
+  });
+
+  document.getElementById("rows-count").textContent =
+    `${rows.length} / ${state.rows.length}`;
+
+  document.getElementById("dividends-tbody").innerHTML = rows.map(d => {
+    const desc = d.description || "—";
+    const security = d.security_name && d.security_name.length > 0
+      ? `<div class="muted" style="font-size: 11px;">${d.security_name}</div>` : "";
+    return `<tr>
+      <td>${formatDate(d.process_date)}</td>
+      <td class="ticker">${d.security_id}${security}</td>
+      <td style="font-size: 12px;">${desc}</td>
+      <td style="color: var(--muted); font-size: 12px;">${d.account_name || "—"}</td>
+      <td>${kindPill(d)}</td>
+      <td class="num">${fmtMoney(d.amount, { currency: true })}</td>
+      <td class="num">${fmtMoney(d.net_amount, { currency: true })}</td>
+      <td class="tx-id">${d.transaction_id}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8" class="empty">Sin movimientos que coincidan con los filtros</td></tr>`;
+}
+
+load();
+</script>
+</body>
+</html>

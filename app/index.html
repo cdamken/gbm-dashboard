@@ -291,8 +291,9 @@ tr:hover { background: rgba(255,255,255,0.02); }
 
 <div class="nav">
   <a href="/app/index.html" class="active">📊 Portafolio</a>
-  <a href="/app/orders.html">📋 Movimientos</a>
-  <a href="/app/orders_all.html">📜 Histórico</a>
+  <a href="/app/orders.html">📋 Órdenes</a>
+  <a href="/app/dividends.html">💰 Dividendos</a>
+  <a href="/app/transactions.html">📒 Libro Diario</a>
 </div>
 
 <div id="error-box"></div>
@@ -394,7 +395,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </table>
 
 <div class="disclaimer">
-  Dashboard no oficial · <span style="font-family: monospace;">gbm-dashboard v0.6.2</span> · datos vía
+  Dashboard no oficial · <span style="font-family: monospace;" data-version></span> · datos vía
   <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
   Todo corre en localhost; nada de tus datos sale de tu máquina.
   No afiliado con Grupo Bursátil Mexicano.
@@ -483,37 +484,15 @@ tr:hover { background: rgba(255,255,255,0.02); }
   </div>
 </div>
 
+<script src="/app/_shared.js"></script>
 <script>
-// ----------------------------------------------------------------------
-// Format helpers
-// ----------------------------------------------------------------------
-const fmtMoney = (n, opts = {}) => {
-  if (n == null || isNaN(n)) return "—";
-  const { sign = false, decimals = 2, currency = false } = opts;
-  const abs = Math.abs(n);
-  const formatted = abs.toLocaleString("es-MX", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-  // Order: sign first, then $, then number. Renders as "+$2,496.49" / "-$1.50".
-  const signPrefix = n < 0 ? "-" : (sign && n > 0 ? "+" : "");
-  const currencyPrefix = currency ? "$" : "";
-  return signPrefix + currencyPrefix + formatted;
-};
+// fmtMoney + formatTimestamp + MONTH_NAMES viven en _shared.js. Aquí solo
+// quedan los helpers exclusivos del portafolio.
 const fmtPct = (n) => {
   if (n == null || isNaN(n)) return "—";
   return (n >= 0 ? "+" : "") + (n * 100).toFixed(2) + "%";
 };
 const pnlClass = (n) => (n > 0 ? "pos" : n < 0 ? "neg" : "muted");
-const formatTimestamp = (iso) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString("es-MX", {
-    year: "numeric", month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-};
 
 const ACCOUNT_TYPES = {
   "trading":     { label: "Trading MX",  color: "blue" },

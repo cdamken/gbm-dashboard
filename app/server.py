@@ -27,6 +27,10 @@ import time
 from pathlib import Path
 
 PORT = 8086
+# Bind to loopback only — the dashboard is for the local user. Listening on
+# 0.0.0.0 would expose /config (writes .env) and /update (runs subprocess)
+# to anyone on the same Wi-Fi.
+BIND_HOST = "127.0.0.1"
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 APP_DIR = PROJECT_DIR / "app"
 ENV_FILE = APP_DIR / ".env"
@@ -37,6 +41,17 @@ PROGRESS_FILE = DATA_DIR / "update_progress.log"
 PROGRESS_LOCK = threading.Lock()
 # Tracks whether an update is currently running so /progress can tell.
 UPDATE_STATE: dict[str, object] = {"running": False, "started_at": None}
+
+# CSRF defense: writes (POST /config, POST /update) must come from a page
+# served by this server — i.e. Origin == http://127.0.0.1:8086 or
+# http://localhost:8086. Anything else (a malicious page in another tab)
+# is rejected.
+_ALLOWED_ORIGINS = frozenset(
+    {
+        f"http://127.0.0.1:{PORT}",
+        f"http://localhost:{PORT}",
+    }
+)
 
 # Map fetch_data.py exit codes to (HTTP status, JSON status string).
 EXIT_CODE_MAP = {
@@ -180,6 +195,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     # POST
     # ------------------------------------------------------------------
     def do_POST(self):
+        # CSRF defense. Browsers always send Origin on POST; if a request
+        # arrives without one OR with a foreign origin, refuse.
+        origin = self.headers.get("Origin", "")
+        if origin and origin not in _ALLOWED_ORIGINS:
+            self._json(403, {"status": "forbidden", "detail": "bad origin"})
+            return
+
         if self.path == "/config":
             self._handle_config()
             return
@@ -248,9 +270,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if totp_code:
             cmd += ["--totp", totp_code]
 
-        # Reset the progress file so the frontend can poll it live.
+        # Atomically reserve the "running" slot. If another update is
+        # already in flight (double-click, two browser tabs, etc.), refuse
+        # this one — otherwise two fetch_data.py processes would race on
+        # the same DATA/*.json files.
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         with PROGRESS_LOCK:
+            if UPDATE_STATE["running"]:
+                self._json(409, {"status": "busy", "detail": "update already running"})
+                return
             PROGRESS_FILE.write_text("Iniciando descarga...\n", encoding="utf-8")
             UPDATE_STATE["running"] = True
             UPDATE_STATE["started_at"] = time.time()
@@ -342,6 +370,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 os.chdir(PROJECT_DIR)
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
+with socketserver.TCPServer((BIND_HOST, PORT), Handler) as httpd:
     print(f"🚀 GBM Dashboard server running at http://localhost:{PORT}/app/index.html")
     httpd.serve_forever()

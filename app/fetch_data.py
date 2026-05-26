@@ -147,8 +147,19 @@ def to_jsonable(obj):
 
 
 def write_json(path: Path, data) -> None:
+    """Atomically write JSON: tmp → fsync → rename.
+
+    Without this, killing the server mid-write (Ctrl-C, kill, OOM) leaves
+    a truncated JSON file and the dashboard shows "Sin datos" until the
+    next successful update.
+    """
     payload = to_jsonable(data)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.replace(path)
     size_kb = path.stat().st_size / 1024
     print(f"  wrote {path.relative_to(PROJECT_DIR)} ({size_kb:.1f} KB)")
 
@@ -337,6 +348,154 @@ def main() -> None:
                 )
             else:
                 print("  no trading accounts → skipping orders download.")
+
+            # ----------------------------------------------------------
+            # Dividends (cash distributions). Lives on api.appgbm.com,
+            # paginates server-side. We iterate every trading account so
+            # users with multiple contracts see them all.
+            # ----------------------------------------------------------
+            if trading_accounts:
+                div_days_back = int(os.environ.get("GBM_DIVIDENDS_DAYS", "365"))
+                div_to = date.today()
+                div_from = div_to - timedelta(days=div_days_back)
+                print(
+                    f"  fetching dividends {div_from} → {div_to} "
+                    f"for {len(trading_accounts)} trading account(s)..."
+                )
+                dividends_payload: list[dict] = []
+                for acct in trading_accounts:
+                    try:
+                        divs = client.dividends.list_for_range(
+                            contract.contract_id,
+                            acct.legacy_contract_id,
+                            div_from,
+                            div_to,
+                        )
+                    except ApiError as e:
+                        # api.appgbm.com may reject our token (different
+                        # Cognito client) — log and skip rather than fail
+                        # the whole run.
+                        print(
+                            f"  dividends {acct.name} ({acct.legacy_contract_id}): {e}"
+                        )
+                        continue
+                    print(
+                        f"  dividends {acct.name} ({acct.legacy_contract_id}): "
+                        f"{len(divs)} item(s)"
+                    )
+                    for d in divs:
+                        dividends_payload.append(
+                            {
+                                "transaction_id": d.transaction_id,
+                                "security_id": d.security_id,
+                                "security_name": d.security_name,
+                                "description": d.transaction_description,
+                                "amount": float(d.transaction_amount),
+                                "net_amount": float(d.transaction_net_amount),
+                                "is_withholding": d.is_withholding,
+                                "process_date": d.process_date.isoformat(),
+                                "settlement_date": (
+                                    d.settlement_date.isoformat()
+                                    if d.settlement_date
+                                    else None
+                                ),
+                                "transaction_time": d.transaction_time,
+                                "account_legacy_id": acct.legacy_contract_id,
+                                "account_name": acct.name,
+                            }
+                        )
+                dividends_payload.sort(key=lambda d: d["process_date"], reverse=True)
+                write_json(
+                    DATA_DIR / "dividends.json",
+                    {
+                        "from_date": div_from.isoformat(),
+                        "to_date": div_to.isoformat(),
+                        "dividends": dividends_payload,
+                    },
+                )
+
+            # ----------------------------------------------------------
+            # Transactions (full ledger). Lives on api.appgbm.com — same
+            # endpoint as dividends but with no transac_type filter so we
+            # get EVERY movement: stock buys/sells, fund buys/sells,
+            # repos, cash transfers, FX, dividends. Iterated over ALL
+            # accounts (not just trading) so Smart Cash, Asesor and
+            # Trading USA are covered. Movements are tagged with the
+            # account so the dashboard can filter.
+            # ----------------------------------------------------------
+            if accounts:
+                tx_days_back = int(os.environ.get("GBM_TRANSACTIONS_DAYS", "365"))
+                tx_to = date.today()
+                tx_from = tx_to - timedelta(days=tx_days_back)
+                print(
+                    f"  fetching transactions {tx_from} → {tx_to} "
+                    f"for {len(accounts)} account(s)..."
+                )
+                transactions_payload: list[dict] = []
+                for acct in accounts:
+                    try:
+                        txs = client.transactions.list_for_range(
+                            contract.contract_id,
+                            acct.legacy_contract_id,
+                            tx_from,
+                            tx_to,
+                        )
+                    except ApiError as e:
+                        print(
+                            f"  transactions {acct.name} "
+                            f"({acct.legacy_contract_id}): {e}"
+                        )
+                        continue
+                    print(
+                        f"  transactions {acct.name} ({acct.legacy_contract_id}): "
+                        f"{len(txs)} item(s)"
+                    )
+                    for t in txs:
+                        transactions_payload.append(
+                            {
+                                "transaction_id": t.transaction_id,
+                                "security_id": t.security_id,
+                                "security_name": t.security_name,
+                                "transaction_type": t.transaction_type,
+                                "sub_transaction_type": t.sub_transaction_type,
+                                "description": t.transaction_description,
+                                "category": t.category,
+                                "is_buy": t.is_buy,
+                                "is_sell": t.is_sell,
+                                "is_cash_flow": t.is_cash_flow,
+                                "amount": float(t.transaction_amount),
+                                "net_amount": float(t.transaction_net_amount),
+                                "quantity": float(t.quantity),
+                                "price": float(t.transaction_price),
+                                "commission": float(t.transaction_commission),
+                                "tax": float(t.transaction_tax),
+                                "process_date": t.process_date.isoformat(),
+                                "settlement_date": (
+                                    t.settlement_date.isoformat()
+                                    if t.settlement_date
+                                    else None
+                                ),
+                                "transaction_time": t.transaction_time,
+                                "account_legacy_id": acct.legacy_contract_id,
+                                "account_name": acct.name,
+                            }
+                        )
+                transactions_payload.sort(
+                    key=lambda t: t["process_date"], reverse=True
+                )
+                accounts_meta_all = [
+                    {"legacy_contract_id": a.legacy_contract_id, "name": a.name}
+                    for a in accounts
+                ]
+                write_json(
+                    DATA_DIR / "transactions.json",
+                    {
+                        "from_date": tx_from.isoformat(),
+                        "to_date": tx_to.isoformat(),
+                        "accounts": accounts_meta_all,
+                        "transactions": transactions_payload,
+                    },
+                )
 
             (DATA_DIR / "last_update.date").write_text(
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S\n"), encoding="utf-8"

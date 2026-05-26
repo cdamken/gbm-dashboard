@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>GBM Libro Diario</title>
+<style>
+:root {
+  --bg: #0f1419;
+  --card: #1a1f2e;
+  --border: #2a3142;
+  --text: #e8eef5;
+  --muted: #7a8599;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+  --purple: #c084fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5;
+}
+
+h1 {
+  font-size: 28px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 12px; font-weight: 700;
+}
+.logo-box {
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  width: 44px; height: 44px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: white;
+}
+
+.subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+
+.nav { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+.nav a {
+  color: var(--muted); text-decoration: none; font-size: 14px;
+  padding: 8px 18px; border-radius: 8px; font-weight: 500;
+  border: 1px solid var(--border); transition: all 0.15s;
+}
+.nav a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.nav a.active {
+  background: var(--blue); color: var(--bg); border-color: var(--blue); font-weight: 600;
+}
+
+.cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px; margin-bottom: 32px;
+}
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px;
+}
+.card .label {
+  color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: 8px;
+}
+.card .value { font-size: 26px; font-weight: 700; }
+.card .delta { font-size: 12px; margin-top: 4px; color: var(--muted); }
+
+.green { color: var(--green); }
+.red { color: var(--red); }
+.amber { color: var(--amber); }
+.blue { color: var(--blue); }
+.purple { color: var(--purple); }
+.muted { color: var(--muted); }
+
+.section {
+  margin: 32px 0 16px; font-size: 18px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+.badge {
+  background: var(--border); color: var(--muted); font-size: 12px;
+  padding: 3px 10px; border-radius: 12px; font-weight: 500;
+}
+
+.controls {
+  display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.controls input, .controls select {
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px;
+}
+.controls input[type="text"] { min-width: 220px; }
+
+table {
+  width: 100%; border-collapse: collapse; background: var(--card);
+  border-radius: 12px; overflow: hidden; margin-bottom: 12px;
+}
+th, td {
+  text-align: left; padding: 12px 14px; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  background: rgba(255,255,255,0.03); color: var(--muted);
+  font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap;
+}
+th:hover { color: var(--text); }
+tr:hover { background: rgba(255,255,255,0.02); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ticker { font-family: monospace; font-weight: 600; }
+.tx-id { font-family: monospace; color: var(--muted); font-size: 11px; }
+
+.cat-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 700; white-space: nowrap;
+}
+.cat-buy_stock    { background: rgba(96, 165, 250, 0.18); color: var(--blue); }
+.cat-sell_stock   { background: rgba(192, 132, 252, 0.18); color: var(--purple); }
+.cat-buy_fund     { background: rgba(96, 165, 250, 0.12); color: var(--blue); }
+.cat-sell_fund    { background: rgba(192, 132, 252, 0.12); color: var(--purple); }
+.cat-repo_buy     { background: rgba(251, 191, 36, 0.12); color: var(--amber); }
+.cat-repo_mature  { background: rgba(251, 191, 36, 0.18); color: var(--amber); }
+.cat-deposit      { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.cat-withdrawal   { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+.cat-fx           { background: rgba(192, 132, 252, 0.10); color: var(--purple); }
+.cat-dividend     { background: rgba(74, 222, 128, 0.10); color: var(--green); }
+.cat-tax_withholding { background: rgba(248, 113, 113, 0.10); color: var(--red); }
+.cat-other        { background: var(--border); color: var(--muted); }
+
+.empty {
+  text-align: center; padding: 40px; color: var(--muted); font-size: 14px;
+}
+.error {
+  background: rgba(248, 113, 113, 0.1); border-left: 4px solid var(--red);
+  padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px;
+}
+.warning {
+  background: rgba(251, 191, 36, 0.1); border-left: 4px solid var(--amber);
+  padding: 14px 18px; border-radius: 8px; margin: 16px 0; font-size: 13px;
+}
+
+.disclaimer {
+  margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; line-height: 1.6;
+}
+.disclaimer a { color: var(--blue); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<h1>
+  <div class="logo-box">GBM</div>
+  Libro Diario
+</h1>
+<div class="subtitle">
+  <span id="range-label">Rango: cargando...</span> ·
+  Última actualización: <span id="last-update">—</span>
+</div>
+
+<div class="nav">
+  <a href="/app/index.html">📊 Portafolio</a>
+  <a href="/app/orders.html">📋 Órdenes</a>
+  <a href="/app/dividends.html">💰 Dividendos</a>
+  <a href="/app/transactions.html" class="active">📒 Libro Diario</a>
+</div>
+
+<div id="error-box"></div>
+
+<!-- ---------- summary cards ---------- -->
+<div class="cards">
+  <div class="card">
+    <div class="label">Compras</div>
+    <div class="value blue" id="total-buys">—</div>
+    <div class="delta" id="buys-detail">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Ventas</div>
+    <div class="value purple" id="total-sells">—</div>
+    <div class="delta" id="sells-detail">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Depósitos</div>
+    <div class="value green" id="total-deposits">—</div>
+    <div class="delta" id="deposits-detail">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Retiros</div>
+    <div class="value red" id="total-withdrawals">—</div>
+    <div class="delta" id="withdrawals-detail">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Movimientos</div>
+    <div class="value" id="total-movements">—</div>
+    <div class="delta" id="movements-detail">—</div>
+  </div>
+</div>
+
+<!-- ---------- filters ---------- -->
+<div class="section">
+  <span>Detalle del ledger</span>
+  <span class="badge" id="rows-count">—</span>
+</div>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="Buscar emisora o descripción..." oninput="render()">
+  <select id="category-filter" onchange="render()">
+    <option value="">Todas las categorías</option>
+    <option value="buy_stock">Compra de Acciones</option>
+    <option value="sell_stock">Venta de Acciones</option>
+    <option value="buy_fund">Compra Soc. de Inv.</option>
+    <option value="sell_fund">Venta Soc. de Inv.</option>
+    <option value="repo_buy">Compra en Reporto</option>
+    <option value="repo_mature">Vencimiento de Reporto</option>
+    <option value="deposit">Depósitos</option>
+    <option value="withdrawal">Retiros</option>
+    <option value="fx">Divisas</option>
+    <option value="dividend">Dividendos</option>
+    <option value="tax_withholding">ISR retenido</option>
+    <option value="other">Otros</option>
+  </select>
+  <select id="month-filter" onchange="render()">
+    <option value="">Todos los meses</option>
+  </select>
+  <select id="account-filter" onchange="render()">
+    <option value="">Todas las cuentas</option>
+  </select>
+</div>
+
+<table id="tx-table">
+  <thead>
+    <tr>
+      <th onclick="setSort('process_date')">Fecha</th>
+      <th onclick="setSort('account_name')">Cuenta</th>
+      <th>Categoría</th>
+      <th onclick="setSort('security_id')">Emisora</th>
+      <th>Descripción</th>
+      <th class="num" onclick="setSort('amount')">Monto</th>
+      <th>ID</th>
+    </tr>
+  </thead>
+  <tbody id="tx-tbody"></tbody>
+</table>
+
+<div class="disclaimer">
+  Dashboard no oficial · <span style="font-family: monospace;" data-version></span> · datos vía
+  <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
+  El <b>Libro Diario</b> es el ledger contable completo de GBM: incluye
+  <b>todos</b> los movimientos del periodo en todas las cuentas
+  (Personal, Asesor, Smart Cash) — compras y ventas de acciones y
+  fondos, reportos, traspasos de efectivo, divisas, dividendos e ISR.
+  Algunas filas también aparecen en Órdenes o Dividendos; aquí las ves
+  en contexto contable completo. Usa los filtros (categoría, mes,
+  cuenta) para acotar la vista.
+</div>
+
+<script src="/app/_shared.js"></script>
+<script>
+const CATEGORY_LABELS = {
+  buy_stock:       "Compra Acción",
+  sell_stock:      "Venta Acción",
+  buy_fund:        "Compra Fondo",
+  sell_fund:       "Venta Fondo",
+  repo_buy:        "Repo (entra)",
+  repo_mature:     "Repo (sale)",
+  deposit:         "Depósito",
+  withdrawal:      "Retiro",
+  fx:              "Divisa",
+  dividend:        "Dividendo",
+  tax_withholding: "ISR",
+  other:           "Otro",
+};
+
+function categoryLabel(c) { return CATEGORY_LABELS[c] || c || "—"; }
+
+function categoryPill(t) {
+  const c = t.category || "other";
+  return `<span class="cat-pill cat-${c}">${categoryLabel(c)}</span>`;
+}
+
+let state = {
+  rows: [],
+  accounts: [],
+  fromDate: null,
+  toDate: null,
+  sortKey: "process_date",
+  sortDir: "desc",
+};
+
+async function load() {
+  try {
+    const opts = { cache: "no-store" };
+    const safeJson = (url) =>
+      fetch(url, opts).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const safeText = (url) =>
+      fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
+    const [data, lastUpdate] = await Promise.all([
+      safeJson("/DATA/transactions.json"),
+      safeText("/DATA/last_update.date"),
+    ]);
+    if (!data) {
+      document.getElementById("error-box").innerHTML =
+        `<div class="warning">
+          <b>Aún no hay datos del ledger.</b>
+          Ve a <a href="/app/index.html" style="color: var(--blue);">📊 Portafolio</a>
+          y dale <b>⟳ Actualizar</b> para descargar tus movimientos del último año.
+        </div>`;
+      return;
+    }
+    state.rows = data.transactions || [];
+    state.accounts = data.accounts || [];
+    state.fromDate = data.from_date;
+    state.toDate = data.to_date;
+
+    document.getElementById("range-label").textContent =
+      `Rango: ${state.fromDate} → ${state.toDate}`;
+    document.getElementById("last-update").textContent = formatTimestamp(lastUpdate.trim());
+
+    populateFilters();
+    render();
+  } catch (err) {
+    document.getElementById("error-box").innerHTML =
+      `<div class="error"><b>Error cargando datos.</b><br>${err.message}</div>`;
+  }
+}
+
+function populateFilters() {
+  const months = [...new Set(state.rows.map(d => monthKey(d.process_date)))].sort().reverse();
+  const monthSel = document.getElementById("month-filter");
+  for (const m of months) {
+    const opt = document.createElement("option");
+    opt.value = m; opt.textContent = monthLabel(m);
+    monthSel.appendChild(opt);
+  }
+  const accountsInRows = [...new Set(state.rows.map(d => d.account_legacy_id || ""))].filter(Boolean);
+  const accSel = document.getElementById("account-filter");
+  for (const id of accountsInRows) {
+    const name = state.rows.find(d => d.account_legacy_id === id)?.account_name || id;
+    const opt = document.createElement("option");
+    opt.value = id; opt.textContent = `${name} (${id})`;
+    accSel.appendChild(opt);
+  }
+}
+
+function setSort(key) {
+  if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+  else { state.sortKey = key; state.sortDir = "desc"; }
+  render();
+}
+
+function renderCards(rows) {
+  const buys        = rows.filter(t => t.is_buy);
+  const sells       = rows.filter(t => t.is_sell);
+  const deposits    = rows.filter(t => t.category === "deposit");
+  const withdrawals = rows.filter(t => t.category === "withdrawal");
+
+  const sumAmt = (rs) => rs.reduce((s, t) => s + (t.amount || 0), 0);
+
+  document.getElementById("total-buys").textContent = "$" + fmtMoney(sumAmt(buys));
+  document.getElementById("buys-detail").textContent =
+    `${buys.length} operación(es)`;
+
+  document.getElementById("total-sells").textContent = "$" + fmtMoney(sumAmt(sells));
+  document.getElementById("sells-detail").textContent =
+    `${sells.length} operación(es)`;
+
+  document.getElementById("total-deposits").textContent = "$" + fmtMoney(sumAmt(deposits));
+  document.getElementById("deposits-detail").textContent =
+    `${deposits.length} depósito(s)`;
+
+  document.getElementById("total-withdrawals").textContent = "$" + fmtMoney(sumAmt(withdrawals));
+  document.getElementById("withdrawals-detail").textContent =
+    `${withdrawals.length} retiro(s)`;
+
+  document.getElementById("total-movements").textContent = rows.length;
+  const months = new Set(rows.map(t => monthKey(t.process_date))).size;
+  document.getElementById("movements-detail").textContent =
+    `${months} mes(es) cubierto(s)`;
+}
+
+function render() {
+  const search = document.getElementById("search").value.toLowerCase();
+  const catFilter = document.getElementById("category-filter").value;
+  const monthFilter = document.getElementById("month-filter").value;
+  const accountFilter = document.getElementById("account-filter").value;
+
+  let rows = state.rows.filter(t => {
+    const blob = (t.security_id + " " + (t.description || "") + " " +
+                  (t.account_name || "")).toLowerCase();
+    if (search && !blob.includes(search)) return false;
+    if (catFilter && t.category !== catFilter) return false;
+    if (monthFilter && monthKey(t.process_date) !== monthFilter) return false;
+    if (accountFilter && t.account_legacy_id !== accountFilter) return false;
+    return true;
+  });
+
+  renderCards(rows);
+
+  rows.sort((a, b) => {
+    const va = a[state.sortKey];
+    const vb = b[state.sortKey];
+    if (typeof va === "string" && typeof vb === "string") {
+      return state.sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+    return state.sortDir === "asc" ? (va - vb) : (vb - va);
+  });
+
+  document.getElementById("rows-count").textContent =
+    `${rows.length} / ${state.rows.length}`;
+
+  document.getElementById("tx-tbody").innerHTML = rows.map(t => {
+    const desc = t.description || "—";
+    const security = (t.security_name && t.security_name.length > 0)
+      ? `<div class="muted" style="font-size: 11px;">${t.security_name}</div>` : "";
+    const secId = t.security_id || "—";
+    return `<tr>
+      <td>${formatDate(t.process_date)}</td>
+      <td style="color: var(--muted); font-size: 12px;">${t.account_name || "—"}</td>
+      <td>${categoryPill(t)}</td>
+      <td class="ticker">${secId}${security}</td>
+      <td style="font-size: 12px;">${desc}</td>
+      <td class="num">${fmtMoney(t.amount, { currency: true })}</td>
+      <td class="tx-id">${t.transaction_id}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" class="empty">Sin movimientos que coincidan con los filtros</td></tr>`;
+}
+
+load();
+</script>
+</body>
+</html>
