@@ -613,14 +613,13 @@ function flattenPositions(posData, account) {
 // ----------------------------------------------------------------------
 // Per-account value: prefer sum(market_value) of positions when available
 // (most accurate, matches what GBM web shows); fall back to
-// accounts.position.amount; last resort, reconstruct from plus_minus
-// for accounts where GBM reports position=0 but the P&L is non-zero
-// (notably Smart Cash, whose money-market balance lives in a field
-// the position endpoint doesn't surface).
+// accounts.position.amount when there's no detailed position data yet.
+// NOTE: for Smart Cash, position=0 AND plus_minus is non-zero — but
+// that plus_minus is *historical* P&L from earlier deposits, and
+// plus_minus_percentage is the fund's APR (4.25%), NOT user P&L%.
+// So we don't try to reconstruct anything from those — Smart Cash at
+// $0 means $0, matching what the GBM mobile app itself shows.
 function accountValue(account) {
-  // Include ALL sections including efectivo so the total matches GBM's
-  // own breakdown. positionsFlat only carries the equity-like sections,
-  // so for efectivo we have to look into the raw positions blob.
   const acctPositions = state.positionsByAccount?.[account.legacy_contract_id];
   if (acctPositions) {
     let total = 0;
@@ -637,14 +636,7 @@ function accountValue(account) {
     }
     if (total !== 0) return total;
   }
-  const direct = Number(account.position?.amount) || 0;
-  if (direct !== 0) return direct;
-  // Smart Cash gap: position=0 but plus_minus is non-zero. Since
-  // plus_minus = pct * cost, current = cost + plus_minus = pm/pct + pm.
-  const pm = Number(account.plus_minus?.amount) || 0;
-  const pct = Number(account.plus_minus_percentage) || 0;
-  if (pm !== 0 && pct !== 0) return pm / pct + pm;
-  return 0;
+  return account.position?.amount || 0;
 }
 
 function aggregates() {
