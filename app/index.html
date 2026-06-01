@@ -558,9 +558,10 @@ async function load() {
     const safeText = (url) =>
       fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
 
-    const [accounts, positionsByAccount, lastUpdate] = await Promise.all([
+    const [accounts, positionsByAccount, investmentsGroups, lastUpdate] = await Promise.all([
       safeJson("/DATA/accounts.json"),
       safeJson("/DATA/positions.json"),
+      safeJson("/DATA/investments_groups.json"),
       safeText("/DATA/last_update.date"),
     ]);
 
@@ -583,6 +584,7 @@ async function load() {
     document.getElementById("error-box").innerHTML = "";
     state.accounts = accounts;
     state.positionsByAccount = positionsByAccount || {};
+    state.investmentsGroups = investmentsGroups || null;
     state.lastUpdate = lastUpdate.trim();
 
     // Flatten positions across ALL accounts. Each position carries the
@@ -652,14 +654,20 @@ function accountValue(account) {
 }
 
 function aggregates() {
-  // Total value = sum of each account's value (using positions where
-  // available — see accountValue() for why). This matches the total
-  // shown in GBM's web app, unlike /v2/.../accounts which can
-  // misreport accounts holding cross-border positions (e.g. SIC inside
-  // a BMV account).
-  const totalValue = state.accounts.reduce(
-    (s, a) => s + accountValue(a), 0
-  );
+  // Total value:
+  // 1) Prefer the v3 dashboard "investments-groups" endpoint when
+  //    available — it's the EXACT number the GBM mobile app shows on
+  //    its home screen (uses live FX rate for offshore holdings).
+  // 2) Otherwise fall back to summing each account's market_value
+  //    (which uses GetPositionSummary's FX snapshot and may diverge
+  //    by ~0.13% during USD market hours).
+  let totalValue;
+  const igTotal = state.investmentsGroups?.total_position?.amount;
+  if (igTotal != null && igTotal !== 0) {
+    totalValue = Number(igTotal);
+  } else {
+    totalValue = state.accounts.reduce((s, a) => s + accountValue(a), 0);
+  }
   // P&L: historical yield from positions, NOT accounts.plus_minus
   // which is intraday-only and reports 0 for accounts whose market is
   // closed (e.g. Trading USA at night).

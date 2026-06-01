@@ -192,6 +192,27 @@ def main() -> None:
             accounts = client.accounts.list_with_dashboard(contract.contract_id)
             print(f"  accounts: {len(accounts)}")
 
+            # The v3/dashboard/investments-groups endpoint is what the
+            # GBM mobile app uses to compute "TOTAL INVERTIDO". Its FX
+            # rate matches the mobile app exactly, so we save it as the
+            # authoritative source for the total value card.
+            email = os.environ.get("GBM_EMAIL", "")
+            if email:
+                try:
+                    ig = client.dashboard.investments_groups(contract.contract_id, email)
+                    write_json(
+                        DATA_DIR / "investments_groups.json",
+                        ig.model_dump(by_alias=False),
+                    )
+                    print(
+                        f"  investments-groups: total=${float(ig.total_position.amount):,.2f} "
+                        f"({len(ig.groups)} groups)"
+                    )
+                except ApiError as e:
+                    print(f"  investments-groups: {e}")
+            else:
+                print("  investments-groups: skipped (no GBM_EMAIL in env)")
+
             accounts_payload = [
                 {
                     "legacy_contract_id": a.legacy_contract_id,
