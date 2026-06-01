@@ -582,7 +582,7 @@ async function load() {
       return;
     }
     document.getElementById("error-box").innerHTML = "";
-    state.accounts = accounts;
+    state.accounts = sortAccounts(accounts);
     state.positionsByAccount = positionsByAccount || {};
     state.investmentsGroups = investmentsGroups || null;
     state.lastUpdate = lastUpdate.trim();
@@ -625,6 +625,15 @@ function flattenPositions(posData, account) {
 // ----------------------------------------------------------------------
 // Aggregates computed live from accounts + positions
 // ----------------------------------------------------------------------
+// Display order for account cards. Sort by GBM's own `number`
+// ascending (= legacy_contract_id ascending, EP47NC01 → EP47NC05).
+// That puts Smart Cash first, then Asesor, Trading USA, Smart Cash
+// USD, Personal — the order of account creation, which is also how
+// the user navigates them in the GBM "Mis cuentas" view.
+function sortAccounts(accounts) {
+  return [...accounts].sort((a, b) => (a.number || 0) - (b.number || 0));
+}
+
 // Per-account value: prefer sum(market_value) of positions when available
 // (most accurate, matches what GBM web shows); fall back to
 // accounts.position.amount when there's no detailed position data yet.

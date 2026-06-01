@@ -3,7 +3,7 @@
 // inline <script>. Exposes everything as globals — kept simple on purpose
 // (no modules, no bundler, no build step).
 
-const VERSION = "0.11.0";
+const VERSION = "0.11.1";
 
 const MONTH_NAMES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
