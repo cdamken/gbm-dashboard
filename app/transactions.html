@@ -121,6 +121,8 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .cat-repo_mature  { background: rgba(251, 191, 36, 0.18); color: var(--amber); }
 .cat-deposit      { background: rgba(74, 222, 128, 0.15); color: var(--green); }
 .cat-withdrawal   { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+.cat-external_deposit    { background: rgba(74, 222, 128, 0.30); color: var(--green); border: 1px solid var(--green); }
+.cat-external_withdrawal { background: rgba(248, 113, 113, 0.30); color: var(--red); border: 1px solid var(--red); }
 .cat-fx           { background: rgba(192, 132, 252, 0.10); color: var(--purple); }
 .cat-dividend     { background: rgba(74, 222, 128, 0.10); color: var(--green); }
 .cat-tax_withholding { background: rgba(248, 113, 113, 0.10); color: var(--red); }
@@ -210,8 +212,10 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <option value="sell_fund">Venta Soc. de Inv.</option>
     <option value="repo_buy">Compra en Reporto</option>
     <option value="repo_mature">Vencimiento de Reporto</option>
-    <option value="deposit">Depósitos</option>
-    <option value="withdrawal">Retiros</option>
+    <option value="deposit">Traspasos (entran)</option>
+    <option value="withdrawal">Traspasos (salen)</option>
+    <option value="external_deposit">Depósitos externos (otro titular GBM)</option>
+    <option value="external_withdrawal">Retiros externos (a otro titular GBM)</option>
     <option value="fx">Divisas</option>
     <option value="dividend">Dividendos</option>
     <option value="tax_withholding">ISR retenido</option>
@@ -255,18 +259,20 @@ tr:hover { background: rgba(255,255,255,0.02); }
 <script src="/app/_shared.js"></script>
 <script>
 const CATEGORY_LABELS = {
-  buy_stock:       "Compra Acción",
-  sell_stock:      "Venta Acción",
-  buy_fund:        "Compra Fondo",
-  sell_fund:       "Venta Fondo",
-  repo_buy:        "Repo (entra)",
-  repo_mature:     "Repo (sale)",
-  deposit:         "Depósito",
-  withdrawal:      "Retiro",
-  fx:              "Divisa",
-  dividend:        "Dividendo",
-  tax_withholding: "ISR",
-  other:           "Otro",
+  buy_stock:           "Compra Acción",
+  sell_stock:          "Venta Acción",
+  buy_fund:            "Compra Fondo",
+  sell_fund:           "Venta Fondo",
+  repo_buy:            "Repo (entra)",
+  repo_mature:         "Repo (sale)",
+  deposit:             "Traspaso (entra)",
+  withdrawal:          "Traspaso (sale)",
+  external_deposit:    "Depósito externo",
+  external_withdrawal: "Retiro externo",
+  fx:                  "Divisa",
+  dividend:            "Dividendo",
+  tax_withholding:     "ISR",
+  other:               "Otro",
 };
 
 function categoryLabel(c) { return CATEGORY_LABELS[c] || c || "—"; }
