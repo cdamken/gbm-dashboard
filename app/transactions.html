@@ -89,6 +89,20 @@ h1 {
   color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px;
 }
 .controls input[type="text"] { min-width: 220px; }
+.controls label.toggle {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--muted); font-size: 13px;
+  background: var(--card); border: 1px solid var(--border);
+  padding: 8px 14px; border-radius: 8px; cursor: pointer;
+}
+.controls label.toggle input { width: 16px; height: 16px; min-width: 0; padding: 0; }
+.noise-banner {
+  background: rgba(96, 165, 250, 0.08);
+  border-left: 4px solid var(--blue);
+  padding: 12px 16px; border-radius: 8px;
+  margin: 0 0 16px; font-size: 13px; color: var(--muted);
+}
+.noise-banner b { color: var(--text); }
 
 table {
   width: 100%; border-collapse: collapse; background: var(--card);
@@ -227,7 +241,13 @@ tr:hover { background: rgba(255,255,255,0.02); }
   <select id="account-filter" onchange="render()">
     <option value="">Todas las cuentas</option>
   </select>
+  <label class="toggle">
+    <input type="checkbox" id="show-noise" onchange="render()">
+    Mostrar ruido del sistema (sweep GBMF2, reportos, traspasos internos)
+  </label>
 </div>
+
+<div id="noise-banner" class="noise-banner"></div>
 
 <table id="tx-table">
   <thead>
@@ -276,6 +296,20 @@ const CATEGORY_LABELS = {
 };
 
 function categoryLabel(c) { return CATEGORY_LABELS[c] || c || "—"; }
+
+// "Noise" = ledger entries that don't represent decisions YOU made,
+// they're the broker's automatic plumbing:
+//   - Sweep automático de GBMF2 BF en Personal (cash management).
+//   - Apertura/vencimiento de reportos en Smart Cash (money market).
+//   - Traspasos de efectivo entre tus propias cuentas (deposit/withdrawal).
+// The user's REAL operations: stock buys/sells, fund buys/sells (excluding
+// the sweep), FX (USD purchases), dividends, ISR, and external transfers.
+function isNoise(t) {
+  if (t.category === "deposit" || t.category === "withdrawal") return true;
+  if (t.category === "repo_buy" || t.category === "repo_mature") return true;
+  if (t.account_legacy_id === "EP47NC05" && t.security_id === "GBMF2 BF") return true;
+  return false;
+}
 
 function categoryPill(t) {
   const c = t.category || "other";
@@ -387,8 +421,10 @@ function render() {
   const catFilter = document.getElementById("category-filter").value;
   const monthFilter = document.getElementById("month-filter").value;
   const accountFilter = document.getElementById("account-filter").value;
+  const showNoise = document.getElementById("show-noise").checked;
 
   let rows = state.rows.filter(t => {
+    if (!showNoise && isNoise(t)) return false;
     const blob = (t.security_id + " " + (t.description || "") + " " +
                   (t.account_name || "")).toLowerCase();
     if (search && !blob.includes(search)) return false;
@@ -397,6 +433,23 @@ function render() {
     if (accountFilter && t.account_legacy_id !== accountFilter) return false;
     return true;
   });
+
+  // Banner explaining what's hidden when not showing noise.
+  const banner = document.getElementById("noise-banner");
+  if (!showNoise) {
+    const hidden = state.rows.filter(isNoise).length;
+    banner.innerHTML = hidden > 0
+      ? `<b>${hidden}</b> movimiento(s) ocultos: <b>sweep automático</b> de
+         GBMF2 BF (cash management de Personal), <b>apertura/vencimiento de
+         reportos</b> (Smart Cash money market) y <b>traspasos internos</b>
+         entre tus cuentas. Son operaciones automáticas del broker, no
+         decisiones tuyas. Marca "Mostrar ruido del sistema" arriba para
+         verlos en el ledger crudo.`
+      : "";
+    banner.style.display = hidden > 0 ? "" : "none";
+  } else {
+    banner.style.display = "none";
+  }
 
   renderCards(rows);
 
