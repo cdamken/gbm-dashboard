@@ -186,7 +186,10 @@ def main() -> None:
             contract = client.contracts.get_main()
             print(f"  contract: {contract.legacy_contract_id}")
 
-            accounts = client.accounts.list(contract.contract_id)
+            # list_with_dashboard merges the legacy /v2 endpoint (balances)
+            # with the newer appgbm.com /dashboard endpoint (which includes
+            # the otherwise-hidden Smart Cash Dólares account).
+            accounts = client.accounts.list_with_dashboard(contract.contract_id)
             print(f"  accounts: {len(accounts)}")
 
             accounts_payload = [

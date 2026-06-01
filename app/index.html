@@ -38,6 +38,16 @@ h1 {
 }
 
 .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+.staleness-chip {
+  display: none; margin-left: 8px;
+  padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600;
+  vertical-align: middle;
+}
+.staleness-chip.show { display: inline-block; }
+.staleness-chip.fresh { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.staleness-chip.warn  { background: rgba(251, 191, 36, 0.18); color: var(--amber); }
+.staleness-chip.stale { background: rgba(248, 113, 113, 0.22); color: var(--red); }
 .subtitle .update-btn {
   margin-left: 12px;
   background: var(--card); border: 1px solid var(--border);
@@ -285,6 +295,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 <div class="subtitle">
   <span id="contract-label">Contrato: cargando...</span> · Última actualización:
   <span id="last-update">—</span>
+  <span id="last-update-age" class="staleness-chip"></span>
   <button class="update-btn" id="update-btn" onclick="triggerUpdate()">⟳ Actualizar</button>
   <button class="settings-btn" id="settings-btn" onclick="openConfigModal()" title="Configurar credenciales">⚙ Cuenta</button>
 </div>
@@ -498,6 +509,7 @@ const ACCOUNT_TYPES = {
   "trading":     { label: "Trading MX",  color: "blue" },
   "trading_usa": { label: "Trading USA", color: "purple" },
   "smart_cash":  { label: "Smart Cash",  color: "amber" },
+  "wealth":      { label: "Smart Cash USD", color: "amber" },  // is_smart_cash_usd: true
 };
 const MARKETS = {
   "mercados_globales_sic":       { label: "SIC",       cls: "market-sic" },
@@ -721,6 +733,17 @@ function renderHeader() {
   const contractCode = root ? root.slice(0, -2) : "?";
   document.getElementById("contract-label").textContent = "Contrato: " + contractCode;
   document.getElementById("last-update").textContent = formatTimestamp(state.lastUpdate);
+  const stale = stalenessHint(state.lastUpdate);
+  const chip = document.getElementById("last-update-age");
+  if (stale && chip) {
+    chip.textContent = stale.label;
+    chip.className = "staleness-chip show " + stale.severity;
+    chip.title = stale.severity === "stale"
+      ? "Tu snapshot es viejo. Dale Actualizar para refrescar."
+      : stale.severity === "warn"
+      ? "Tu snapshot tiene más de 15 min."
+      : "Datos frescos.";
+  }
 }
 
 function renderCards() {
