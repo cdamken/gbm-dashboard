@@ -123,9 +123,15 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
   `transactions.json` (sin API extra). Para algo más fancy (OFX, XML
   SAT) queda como ampliación.
 
-- [ ] **Incremental sync** — hoy cada ⟳ Actualizar baja todo. TR hace
-  delta sync (~2-15s vs minutos). Trabajo mayor pero impacto alto si
-  Carlos actualiza varias veces al día.
+- [ ] **Incremental sync** — diferido. Análisis 2026-06-02: con los
+  tamaños actuales del dataset (~23 dividends, ~200 transactions,
+  ~100 orders en 365d) un Update completo tarda ~30s. Lo que tarda
+  es positions (snapshot, no se puede incrementar) y el v3 dashboard
+  endpoint (5-30s server-side). Incremental sync ahorraría 5-10s
+  máximo. Costo de implementación alto (tracking de last_fetched +
+  merge dedupado) vs beneficio bajo a esta escala. Reconsiderar
+  cuando el dataset crezca (ej. >1000 transactions) o si subes
+  `GBM_TRANSACTIONS_DAYS` a 1095+ y el fetch se vuelve lento.
 
 ## 4. Seguridad / robustez
 
