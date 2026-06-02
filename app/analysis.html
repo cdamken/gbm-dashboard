@@ -61,6 +61,19 @@ body {
   border-radius: 12px; padding: 20px 24px;
   margin-bottom: 24px;
 }
+.stat-row {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 24px;
+  margin-bottom: 16px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 18px;
+}
+.stat-row .stat-label {
+  color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.7px; font-weight: 600; margin-bottom: 4px;
+}
+.stat-row .stat-value { font-size: 22px; font-weight: 700; }
+.stat-row .stat-detail { font-size: 11px; color: var(--muted); margin-top: 3px; }
 .chart-card .chart-title {
   font-size: 14px; color: var(--muted); margin-bottom: 12px;
   text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600;
@@ -122,6 +135,23 @@ body {
 <div class="section">
   <span>Dividendos por mes</span>
   <span class="badge muted" id="div-badge">últimos 12 meses</span>
+</div>
+<div class="stat-row" id="div-stats">
+  <div>
+    <div class="stat-label">Recibido (12m)</div>
+    <div class="stat-value" id="div-received">—</div>
+    <div class="stat-detail" id="div-received-detail">—</div>
+  </div>
+  <div>
+    <div class="stat-label">ISR retenido (12m)</div>
+    <div class="stat-value red" id="div-tax">—</div>
+    <div class="stat-detail" id="div-tax-detail">—</div>
+  </div>
+  <div>
+    <div class="stat-label">Proyección próximos 12m</div>
+    <div class="stat-value green" id="div-forecast">—</div>
+    <div class="stat-detail" id="div-forecast-detail">—</div>
+  </div>
 </div>
 <div class="chart-card">
   <div class="chart-container">
@@ -248,6 +278,7 @@ async function load() {
 
     renderHeader();
     renderAllocationChart();
+    renderDividendStats();
     renderDividendsChart();
     renderNetWorthChart();
   } catch (err) {
@@ -264,6 +295,12 @@ function renderHeader() {
   if (stale && chip) {
     chip.textContent = stale.label;
     chip.className = "staleness-chip show " + stale.severity;
+    const hint = stale.severity === "stale"
+      ? "Tu snapshot es viejo — dale ⟳ Actualizar."
+      : stale.severity === "warn"
+      ? "Tu snapshot tiene más de 15 min."
+      : "Datos frescos.";
+    chip.title = `${formatTimestamp(state.lastUpdate)}\n${hint}`;
   }
 }
 
@@ -378,6 +415,79 @@ function renderAllocationChart() {
       },
     },
   });
+}
+
+// ----------------------------------------------------------------------
+// Dividend stats: received (12m), ISR retenido (12m), forward projection.
+// Forward projection ports the TR algorithm exactly: scale up the
+// observed window to 365 days. Requires ≥90 days of history to avoid
+// noise — below that we surface "necesitas más historial".
+// ----------------------------------------------------------------------
+function renderDividendStats() {
+  const rows = state.dividends?.dividends || [];
+  const payouts = rows.filter(r => !r.is_withholding);
+  const taxes = rows.filter(r => r.is_withholding);
+
+  // Last-12-months window — defined by date range, NOT the data span,
+  // so the historical totals don't undercount when the user has < 365
+  // days of GBM-exposed history.
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - 365);
+  const inWindow = (r) => {
+    const d = new Date(r.process_date || "");
+    return !isNaN(d.getTime()) && d >= cutoff;
+  };
+
+  const totalNet = payouts.filter(inWindow)
+    .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const totalTax = taxes.filter(inWindow)
+    .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+
+  document.getElementById("div-received").textContent =
+    fmtMoney(totalNet, { currency: true, decimals: 2 });
+  document.getElementById("div-received-detail").textContent =
+    `${payouts.filter(inWindow).length} pagos`;
+  document.getElementById("div-tax").textContent =
+    fmtMoney(totalTax, { currency: true, decimals: 2 });
+  document.getElementById("div-tax-detail").textContent =
+    `${taxes.filter(inWindow).length} retenciones`;
+
+  // Forward projection: scale observed payouts to a full 365-day window.
+  const forecastEl = document.getElementById("div-forecast");
+  const forecastDetailEl = document.getElementById("div-forecast-detail");
+  if (payouts.length === 0) {
+    forecastEl.textContent = "—";
+    forecastEl.className = "stat-value muted";
+    forecastDetailEl.textContent = "sin dividendos en historial";
+    return;
+  }
+  const dates = payouts
+    .map(r => new Date(r.process_date))
+    .filter(d => !isNaN(d.getTime()))
+    .sort((a, b) => a - b);
+  if (dates.length === 0) {
+    forecastEl.textContent = "—";
+    forecastEl.className = "stat-value muted";
+    forecastDetailEl.textContent = "fechas inválidas";
+    return;
+  }
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const spanDays = Math.max(1, Math.floor((last - first) / (1000 * 60 * 60 * 24)));
+  if (spanDays < 90) {
+    forecastEl.textContent = "—";
+    forecastEl.className = "stat-value muted";
+    forecastDetailEl.textContent = `solo ${spanDays}d de historial (necesita ≥90d)`;
+    return;
+  }
+  const totalAll = payouts
+    .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const scaled = spanDays < 365 ? totalAll * (365 / spanDays) : totalAll;
+  forecastEl.textContent = fmtMoney(scaled, { currency: true, decimals: 0 });
+  forecastEl.className = "stat-value green";
+  forecastDetailEl.textContent =
+    `proyectado de ${payouts.length} pagos en ${spanDays}d`;
 }
 
 // ----------------------------------------------------------------------

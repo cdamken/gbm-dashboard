@@ -65,9 +65,13 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
   empiece a dar números útiles. Probar con valores 730, 1095, 1825 días
   en `app/.env` y ver qué devuelve la API.
 
-- [ ] **Yield on cost / dividend forecast 12m** — proyectar próximos
-  12 meses de dividendos basado en los 365 días anteriores. Útil
-  dado el universo MX de dividenderas (FIBRA*, AC, KOF, etc.).
+- [x] **Yield on cost / dividend forecast 12m** — implementado 2026-06-02
+  en `analysis.html` como stat row arriba del bar chart de dividendos.
+  Muestra: recibido (12m), ISR retenido (12m), proyección próximos
+  12m (escalando observado a 365d). Requiere ≥90 días de historial
+  para mostrar la proyección — bajo eso surfacea "necesita más
+  historial" en lugar de un número ruidoso. Misma lógica que TR
+  `forward_dividend_income`.
 
 - [x] **Concentration warnings** — implementado 2026-06-02. Banner
   ámbar (caution) si top > 30% o top-5 > 70%. Banner rojo (severe)
@@ -109,8 +113,9 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
 
 ## 5. Quality of life menor
 
-- [ ] **Tooltip en staleness chip** mostrando exactamente cuándo fue el
-  último update (no solo "hace N min").
+- [x] **Tooltip en staleness chip** — implementado 2026-06-02. El
+  hover ahora muestra el timestamp exacto en zona CDMX + un hint
+  breve sobre la antigüedad. Aplica al chip del index y del análisis.
 
 - [x] **Versión visible en footer** — implementado 2026-06-02.
   Footer ahora muestra `gbm-dashboard vX.Y.Z · gbm-mx-api vA.B.C`.

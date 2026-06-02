@@ -751,11 +751,14 @@ function renderHeader() {
   if (stale && chip) {
     chip.textContent = stale.label;
     chip.className = "staleness-chip show " + stale.severity;
-    chip.title = stale.severity === "stale"
-      ? "Tu snapshot es viejo. Dale Actualizar para refrescar."
+    // Tooltip = exact timestamp + a short hint about freshness, so a
+    // hover gives both "when exactly" and "is this stale or fresh".
+    const hint = stale.severity === "stale"
+      ? "Tu snapshot es viejo — dale ⟳ Actualizar."
       : stale.severity === "warn"
       ? "Tu snapshot tiene más de 15 min."
       : "Datos frescos.";
+    chip.title = `${formatTimestamp(state.lastUpdate)}\n${hint}`;
   }
 }
 
