@@ -40,9 +40,11 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
   cuando no tienen coincidencias. Tab nueva en top-bar entre Libro
   Diario y Configuración.
 
-- [ ] **Switch account UX explícito** — actualmente cambiar email en
-  Configuración hace el switch implícito. Botón "Cambiar de cuenta"
-  separado que abra el flow con context claro.
+- [x] **Switch account UX explícito** — implementado 2026-06-02. Botón
+  "🔄 Cambiar a otra cuenta…" en Configuración → sección Cuenta. Pide
+  confirmación, vacía email + password, focuses email. Al guardar con
+  otro email el flow existente (account_changed en /config POST) hace
+  el wipe automático.
 
 ## 2. Gráficos & analítica (lo más impactante — el dashboard hoy es 100% tablas)
 
@@ -70,10 +72,15 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
   API lo permite, o esperando que pasen los meses). Ver
   `index.html::xirr` + `buildXirrCashflows`.
 
-- [ ] **Investigar si GBM expone historial > 365 días de transacciones**
-  — si sí, subir el default de `GBM_TRANSACTIONS_DAYS` haría que XIRR
-  empiece a dar números útiles. Probar con valores 730, 1095, 1825 días
-  en `app/.env` y ver qué devuelve la API.
+- [x] **Investigar si GBM expone historial > 365 días** — confirmado
+  2026-06-02 leyendo `gbm-mx-api::api/transactions.py`. La API misma
+  NO impone límite — el 365 default es nuestro. El endpoint
+  `https://api.appgbm.com/v2/trading/contracts/{id}/transactions`
+  acepta cualquier `start_date`/`end_date`. El user puede subir
+  `Libro Diario (días)` en Settings → Rangos de datos a 1095/1825+
+  y XIRR/línea de patrimonio empezarán a dar números útiles.
+  El server-side de GBM puede tener su propio límite que no conocemos
+  hasta probar; el tip está documentado en settings.html.
 
 - [x] **Yield on cost / dividend forecast 12m** — implementado 2026-06-02
   en `analysis.html` como stat row arriba del bar chart de dividendos.
@@ -116,10 +123,14 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
 
 - [x] **CSRF check en POST endpoints** — ya en server.py via Origin header.
 - [x] **Auto-refresh de sesión Cognito** — gbm-mx-api 0.3.0.
-- [ ] **Endpoint /revoke real** — `/reset` wipea local pero NO invalida
-  el refresh_token en Cognito server-side. "Logout verdadero" requiere
-  llamar a `GlobalSignOut` de Cognito. Para cuando quieras forzar un
-  reset real (ej. equipo robado).
+- [x] **Endpoint /revoke real** — implementado 2026-06-02 con
+  `gbm-mx-api 0.3.1::auth.global_signout()`. POST /reset ahora:
+  (1) refresca el access_token si expiró, (2) llama a Cognito
+  GlobalSignOut → refresh_token inválido server-side, (3) wipea local.
+  Best-effort: si Cognito está unreachable, el wipe local sigue
+  funcionando. La respuesta incluye `signed_out_globally: bool` y
+  `signout_detail` para que el UI distinga "revocación completa" de
+  "solo borrado local".
 
 ## 5. Quality of life menor
 

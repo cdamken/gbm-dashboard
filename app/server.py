@@ -268,14 +268,54 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def _handle_reset(self):
-        """Wipe the cached session + DATA so the next update forces a fresh TOTP.
+        """Revoke the session and wipe DATA.
 
-        Credentials in app/.env are kept — the user explicitly asked to
-        revoke the session, not to log out completely. To rotate
-        credentials, use the Cuenta section.
+        Two layers of cleanup:
+          1. Try to call Cognito GlobalSignOut so the refresh_token is
+             invalidated server-side — this is the difference between
+             "deleted my local file" and "really logged out". Best-effort:
+             a network failure or expired access token doesn't block the
+             local wipe.
+          2. Delete ~/.gbm-mx/session.json + every DATA/*.json. Credentials
+             in app/.env are kept — the user explicitly asked to revoke
+             the session, not to forget the account.
         """
+        signed_out = False
+        signout_detail: str | None = None
+        try:
+            # Lazy import keeps server startup snappy (avoids pulling
+            # httpx + pydantic at boot when /reset is never hit).
+            from gbm_mx_api.auth.refresh import global_signout, refresh_session
+            from gbm_mx_api.auth.session import Session
+
+            session = Session.try_load()
+            if session is not None:
+                # GlobalSignOut requires a NON-expired access token. If
+                # ours expired, refresh it first using the refresh_token
+                # we're about to invalidate — small detour, cleaner result.
+                if session.is_expired and session.refresh_token:
+                    try:
+                        session = refresh_session(session)
+                    except Exception as exc:
+                        signout_detail = f"refresh before signout failed: {exc}"
+                        session = None
+                if session is not None:
+                    global_signout(session)
+                    signed_out = True
+        except Exception as exc:
+            # Cognito unreachable, access token already revoked, etc.
+            # Don't fail the /reset — local wipe is still useful.
+            signout_detail = f"{type(exc).__name__}: {exc}"
+
         _wipe_session_and_data()
-        self._json(200, {"status": "ok"})
+        self._json(
+            200,
+            {
+                "status": "ok",
+                "signed_out_globally": signed_out,
+                "signout_detail": signout_detail,
+            },
+        )
 
     def _handle_settings(self):
         """Persist the configurable days-back values to .env."""

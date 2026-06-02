@@ -187,6 +187,9 @@ body {
       <div class="flash" id="account-flash"></div>
       <div class="settings-actions">
         <button class="primary" id="save-account-btn" type="button">Guardar credenciales</button>
+        <button class="ghost" id="switch-account-btn" type="button" title="Limpiar los campos para conectarte a otra cuenta GBM+">
+          🔄 Cambiar a otra cuenta…
+        </button>
       </div>
     </section>
 
@@ -197,6 +200,13 @@ body {
         Cuántos días hacia atrás bajar al hacer ⟳ Actualizar. Valores
         mayores → más datos pero el fetch tarda más. Defaults: órdenes 90,
         dividendos y libro diario 365.
+        <br><br>
+        <b>Tip</b>: la API de GBM no impone un límite duro de fecha. Si
+        quieres que <b>XIRR</b> y la <b>línea de patrimonio</b> en Análisis
+        empiecen a tener sentido, sube "Libro Diario" a 1095 (3 años) o
+        más — así el cálculo cubre la historia real de depósitos.
+        Algunos endpoints sí pueden empezar a fallar con rangos muy
+        grandes; si pasa, baja el número.
       </p>
       <div class="settings-row">
         <label for="orders-days-input">Órdenes (días)</label>
@@ -411,7 +421,10 @@ async function revokeSession() {
     });
     const p = await r.json();
     if (r.ok && p.status === "ok") {
-      flash(flashEl, true, "Sesión + caché borrados. Dale ⟳ Actualizar para autenticar de nuevo.");
+      const msg = p.signed_out_globally
+        ? "Sesión revocada en Cognito (refresh_token inválido server-side) + caché borrado. ⟳ Actualizar va a pedir TOTP."
+        : `Caché borrado localmente. Cognito GlobalSignOut no se ejecutó${p.signout_detail ? " (" + p.signout_detail + ")" : ""}. El refresh_token puede seguir vivo en Cognito hasta que expire.`;
+      flash(flashEl, p.signed_out_globally, msg);
       await loadSessionInfo();
     } else {
       flash(flashEl, false, p.detail || "No se pudo revocar.");
@@ -440,7 +453,25 @@ function wireSidebarScrollspy() {
   for (const s of sections) observer.observe(s);
 }
 
+// "Switch account" — clear the form so the user types a fresh email +
+// password. Saving with a different email later will trigger the
+// implicit wipe in the server (account_changed branch in /config POST).
+// This is just a UX shortcut so the user doesn't have to manually
+// erase the autofilled email.
+function switchAccount() {
+  if (!confirm("Vas a conectarte a otra cuenta GBM+.\n\nLos campos email y contraseña se vaciarán. Al guardar con un email diferente, la sesión y el caché actuales se borrarán automáticamente y el próximo ⟳ Actualizar pedirá TOTP de la nueva cuenta.\n\n¿Continuar?")) {
+    return;
+  }
+  document.getElementById("email-input").value = "";
+  document.getElementById("password-input").value = "";
+  const flash = document.getElementById("account-flash");
+  flash.textContent = "Captura el email y contraseña de la otra cuenta GBM+, después dale Guardar.";
+  flash.className = "flash show ok";
+  document.getElementById("email-input").focus();
+}
+
 document.getElementById("save-account-btn").addEventListener("click", saveAccount);
+document.getElementById("switch-account-btn").addEventListener("click", switchAccount);
 document.getElementById("save-data-btn").addEventListener("click", saveData);
 document.getElementById("refresh-session-btn").addEventListener("click", refreshSessionNow);
 document.getElementById("revoke-session-btn").addEventListener("click", revokeSession);
