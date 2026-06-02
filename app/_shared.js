@@ -133,10 +133,14 @@ const SHARED_CHROME_CSS = `
 }
 .top-bar .brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .top-bar .brand-logo {
-  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  /* Brand-adjacent: navy → teal gradient evokes GBM's corporate look
+     (gbm.com) without going full light-theme. White text stays
+     readable across the whole strip. */
+  background: linear-gradient(135deg, #003b71, #00b8a9);
   width: 28px; height: 28px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 800; color: white;
+  letter-spacing: 0.5px;
 }
 .top-bar .brand-title { font-size: 15px; font-weight: 700; color: var(--text); }
 .top-bar nav {
