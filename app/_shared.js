@@ -424,8 +424,9 @@ function _tabFromPath() {
 
 // Add only the staleness chip into the page's .subtitle (the page itself
 // still owns the surrounding "Última actualización: <timestamp>" text).
-// The chip's color is set by the page when it calls renderHeader() after
-// reading last_update.date.
+// The chip's initial color is set by the page when it calls renderHeader
+// after reading last_update.date; AFTER that, refreshStalenessChip below
+// keeps it current (60s poll + cross-tab BroadcastChannel signal).
 function injectStalenessChip() {
   if (document.getElementById("last-update-age")) return;
   const subtitle = document.querySelector(".subtitle");
@@ -435,6 +436,49 @@ function injectStalenessChip() {
   chip.className = "staleness-chip";
   subtitle.appendChild(document.createTextNode(" "));
   subtitle.appendChild(chip);
+}
+
+// Re-fetch /DATA/last_update.date and re-paint the chip. Safe to call
+// repeatedly. Used by the 60s poll (so a "5 min ago" tab rolls over to
+// "6 min ago" without a reload) and by the cross-tab BroadcastChannel
+// listener (so a tab that didn't trigger the update still catches up).
+async function refreshStalenessChip() {
+  const chip = document.getElementById("last-update-age");
+  if (!chip) return;
+  try {
+    const r = await fetch("/DATA/last_update.date?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return;
+    const ts = (await r.text()).trim();
+    if (!ts) return;
+    const stale = stalenessHint(ts);
+    if (!stale) return;
+    chip.textContent = stale.label;
+    chip.className = "staleness-chip show " + stale.severity;
+    const hint = stale.severity === "stale"
+      ? "Tu snapshot es viejo — dale ⟳ Actualizar."
+      : stale.severity === "warn"
+      ? "Tu snapshot tiene más de 15 min."
+      : "Datos frescos.";
+    chip.title = `${formatTimestamp(ts)}\n${hint}`;
+  } catch (_) { /* keep prior state */ }
+}
+
+// Cross-tab signaling: when Update Now finishes in one tab, broadcast
+// so the chip in OTHER tabs refreshes instantly. Falls back gracefully
+// to the 60s poll below on browsers without BroadcastChannel.
+let _gbmUpdateChannel = null;
+try {
+  _gbmUpdateChannel = new BroadcastChannel("gbm-dashboard-update");
+  _gbmUpdateChannel.onmessage = (e) => {
+    if (e.data && e.data.type === "update-complete") {
+      refreshStalenessChip();
+    }
+  };
+} catch (_) { /* old browser */ }
+function broadcastUpdateComplete() {
+  if (_gbmUpdateChannel) {
+    try { _gbmUpdateChannel.postMessage({ type: "update-complete", t: Date.now() }); } catch (_) {}
+  }
 }
 
 function injectSharedChromeHtml() {
@@ -526,6 +570,7 @@ async function triggerUpdate(totpCode = null) {
     closeModal();
     btn.textContent = "⟳ Refrescando vista...";
     await refreshDashboardData();
+    broadcastUpdateComplete();   // tell other tabs to refresh their chip
     stopOverlay();
     btn.disabled = false;
     btn.textContent = "⟳ Actualizar";
@@ -764,6 +809,10 @@ window.addEventListener("DOMContentLoaded", () => {
   injectSharedChromeCss();
   injectTopBar();
   injectStalenessChip();
+  // Keep the chip current — re-fetch every minute so "5 min ago"
+  // rolls over to "6 min ago" without a reload, and so a tab that
+  // didn't trigger the update still catches up to one that did.
+  setInterval(refreshStalenessChip, 60_000);
   injectSharedChromeHtml();
 
   // Escape closes any open modal.
