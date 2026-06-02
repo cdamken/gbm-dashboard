@@ -74,6 +74,23 @@ body {
 }
 .stat-row .stat-value { font-size: 22px; font-weight: 700; }
 .stat-row .stat-detail { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+/* Range pills: 1M / 3M / 6M / 1Y / All over the history chart. */
+.range-pills {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 8px; justify-content: flex-end;
+}
+.range-pills button {
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--muted); padding: 5px 12px; border-radius: 6px;
+  cursor: pointer; font-size: 12px; font-weight: 600;
+  transition: all 0.15s;
+}
+.range-pills button:hover { color: var(--text); border-color: var(--muted); }
+.range-pills button.active {
+  color: var(--blue); border-color: var(--blue);
+  background: rgba(96, 165, 250, 0.10);
+}
 .chart-card .chart-title {
   font-size: 14px; color: var(--muted); margin-bottom: 12px;
   text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600;
@@ -166,6 +183,13 @@ body {
 <div class="section">
   <span>Capital invertido en el tiempo</span>
   <span class="badge muted" id="hist-badge">cost basis (compras − ventas)</span>
+</div>
+<div class="range-pills" id="history-range-pills">
+  <button data-range="1M">1M</button>
+  <button data-range="3M">3M</button>
+  <button data-range="6M">6M</button>
+  <button data-range="1Y">1Y</button>
+  <button data-range="ALL" class="active">All</button>
 </div>
 <div class="chart-card">
   <div class="chart-container">
@@ -644,6 +668,7 @@ function renderDividendsChart() {
 // chart badge calls this out.
 // ----------------------------------------------------------------------
 let _histChart = null;
+let _histRange = "ALL";  // 1M / 3M / 6M / 1Y / ALL — last user choice
 function renderNetWorthChart() {
   if (typeof window.Chart !== "function") return;
   const canvas = document.getElementById("history-chart");
@@ -694,14 +719,27 @@ function renderNetWorthChart() {
     datesSorted.push(today);
   }
 
-  const labels = datesSorted.map(d => d);
-  const values = datesSorted.map(d => dailyMap.get(d));
+  // Apply the user-selected range filter. ALL = no filter; otherwise
+  // cut to the last N days. We always keep at least one point so the
+  // chart doesn't crash on tiny windows.
+  const rangeDays = { "1M": 30, "3M": 90, "6M": 180, "1Y": 365 }[_histRange];
+  let filteredDates = datesSorted;
+  if (rangeDays) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - rangeDays);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    filteredDates = datesSorted.filter(d => d >= cutoffStr);
+    if (filteredDates.length === 0) filteredDates = [datesSorted[datesSorted.length - 1]];
+  }
 
-  // Update badge with window summary.
+  const labels = filteredDates.map(d => d);
+  const values = filteredDates.map(d => dailyMap.get(d));
+
+  // Update badge with window summary (reflects the selected range).
   const minV = Math.min(...values);
   const maxV = Math.max(...values);
-  const fromDate = state.transactions?.from_date || datesSorted[0];
-  const toDate = state.transactions?.to_date || today;
+  const fromDate = filteredDates[0];
+  const toDate = filteredDates[filteredDates.length - 1];
   document.getElementById("hist-badge").textContent =
     `${fromDate} → ${toDate} · rango ${fmtMoney(minV, { currency: true, decimals: 0 })} a ${fmtMoney(maxV, { currency: true, decimals: 0 })}`;
 
@@ -783,6 +821,19 @@ function renderNetWorthChart() {
     },
   });
 }
+
+// Range pill clicks: just update _histRange and re-render. The chart
+// state in memory is what's expensive — recomputing from positionsFlat
+// is cheap (only ~200 transactions). No need to memoize.
+document.getElementById("history-range-pills").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-range]");
+  if (!btn) return;
+  _histRange = btn.dataset.range;
+  document.querySelectorAll("#history-range-pills button").forEach(b =>
+    b.classList.toggle("active", b.dataset.range === _histRange)
+  );
+  renderNetWorthChart();
+});
 
 window.onUpdateComplete = load;
 

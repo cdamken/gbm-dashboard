@@ -20,8 +20,11 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
   - Mantener verde/rojo/ámbar funcionales para P&L y market pills
   - NO es rebrand completo, NO light theme, NO whitespace-heavy. ~1h.
 
-- [ ] **Range pills (1W / 1M / 3M / 6M / 1Y / All)** en los gráficos
-  cuando se agreguen. Patrón directo de TR. Trivial una vez que existan charts.
+- [x] **Range pills (1M / 3M / 6M / 1Y / All)** — implementado 2026-06-02
+  en el chart de "Capital invertido" en Análisis. Filtra los puntos del
+  array antes de renderear. El bar chart de dividendos siempre muestra
+  12 meses (no necesita pills). Las pills 1W están omitidas — granularidad
+  diaria con < 7 puntos no es informativa.
 
 - [x] **Position detail modal con links externos** — implementado
   2026-06-02. Click en un ticker abre un panel lateral con: cantidad,
@@ -31,8 +34,11 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
   fondos → solo Google search. Tickers con asterisco (SIC) se limpian
   para los lookups. Ver `index.html::openPositionModal`.
 
-- [ ] **Página Glossary** (en español) — términos de inversión MX:
-  ISR, IVA, SIC, BMV, FIBRA, repo, etc. Tab nueva en el top-bar.
+- [x] **Página Glossary** — implementado 2026-06-02. `/app/glossary.html`
+  con 5 secciones (Mercados, Cuentas, Fiscal SAT, Métricas, Categorías
+  del Libro Diario) ~25 términos. Búsqueda en vivo, secciones colapsan
+  cuando no tienen coincidencias. Tab nueva en top-bar entre Libro
+  Diario y Configuración.
 
 - [ ] **Switch account UX explícito** — actualmente cambiar email en
   Configuración hace el switch implícito. Botón "Cambiar de cuenta"

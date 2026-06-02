@@ -369,6 +369,7 @@ const TABS = [
   { tab: "orders",       href: "/app/orders.html",       label: "📋 Órdenes" },
   { tab: "dividends",    href: "/app/dividends.html",    label: "💰 Dividendos" },
   { tab: "transactions", href: "/app/transactions.html", label: "📒 Libro Diario" },
+  { tab: "glossary",     href: "/app/glossary.html",     label: "📖 Glosario" },
   { tab: "settings",     href: "/app/settings.html",     label: "⚙ Configuración" },
 ];
 
@@ -412,6 +413,7 @@ function _tabFromPath() {
   if (p.endsWith("/orders.html")) return "orders";
   if (p.endsWith("/dividends.html")) return "dividends";
   if (p.endsWith("/transactions.html")) return "transactions";
+  if (p.endsWith("/glossary.html")) return "glossary";
   if (p.endsWith("/settings.html")) return "settings";
   return "portfolio";  // index.html or anything else defaults to portfolio
 }
