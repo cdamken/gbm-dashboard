@@ -188,6 +188,69 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .disclaimer a { color: var(--blue); text-decoration: none; }
 .disclaimer a:hover { text-decoration: underline; }
 
+/* Position detail modal — slide-in panel from the right with the
+   instrument's data + external research links. */
+.pos-modal-backdrop {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.55); z-index: 150;
+  align-items: stretch; justify-content: flex-end;
+}
+.pos-modal-backdrop.open { display: flex; }
+.pos-modal-panel {
+  background: var(--card); width: min(520px, 100vw); height: 100vh;
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+  overflow: hidden;
+}
+.pos-modal-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+}
+.pos-modal-header h3 { font-size: 16px; flex: 1; margin: 0; font-family: monospace; }
+.pos-modal-header .pos-subtitle {
+  font-size: 12px; color: var(--muted); font-weight: 400;
+  font-family: -apple-system, sans-serif; margin-top: 2px;
+}
+.pos-modal-close {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+  width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 18px;
+  line-height: 1;
+}
+.pos-modal-close:hover { color: var(--text); border-color: var(--text); }
+.pos-modal-body { flex: 1; overflow: auto; padding: 20px; }
+.pm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.pm-stat {
+  background: var(--bg); padding: 12px 14px; border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.pm-label {
+  color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.7px; font-weight: 600;
+}
+.pm-value { font-size: 18px; margin-top: 4px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pm-meta { color: var(--muted); font-size: 13px; margin: 16px 0 8px; }
+.pm-meta code { color: var(--text); font-size: 12px; }
+.pos-modal-footer {
+  padding: 16px 20px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.pos-modal-footer a {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); padding: 8px 14px; border-radius: 6px;
+  text-decoration: none; font-size: 13px; font-weight: 500;
+  transition: all 0.15s;
+}
+.pos-modal-footer a:hover { border-color: var(--blue); color: var(--blue); }
+
+/* Make the ticker cell visibly clickable. */
+.ticker-link {
+  cursor: pointer;
+  color: var(--text);
+  border-bottom: 1px dotted transparent;
+  transition: border-color 0.15s, color 0.15s;
+}
+.ticker-link:hover { color: var(--blue); border-bottom-color: var(--blue); }
+
 /* Modal + progress overlay styles live in _shared.js (chrome). */
 </style>
 </head>
@@ -316,6 +379,22 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </div>
 
 <!-- TOTP modal, config modal, and progress overlay are injected by _shared.js. -->
+
+<!-- Position detail modal — opens when clicking a ticker in the positions
+     table. Shows the aggregated data + external research links. -->
+<div id="pos-modal" class="pos-modal-backdrop" onclick="if(event.target===this)closePositionModal()">
+  <div class="pos-modal-panel" onclick="event.stopPropagation()">
+    <div class="pos-modal-header">
+      <div style="flex:1;">
+        <h3 id="pm-ticker">—</h3>
+        <div class="pos-subtitle" id="pm-name">—</div>
+      </div>
+      <button class="pos-modal-close" onclick="closePositionModal()" title="Cerrar (Esc)">✕</button>
+    </div>
+    <div class="pos-modal-body" id="pm-body"></div>
+    <div class="pos-modal-footer" id="pm-links"></div>
+  </div>
+</div>
 
 <script src="/app/_shared.js"></script>
 <script>
@@ -1011,7 +1090,8 @@ function renderTable() {
          <div style="color: var(--muted); font-size: 10px;">${p._account_list}</div>`
       : (p._account_list || "—");
     return `<tr>
-      <td class="ticker">${p.issue_id}
+      <td class="ticker">
+        <span class="ticker-link" onclick="openPositionModal('${p.issue_id.replace(/'/g, "\\'")}')">${p.issue_id}</span>
         <div style="color: var(--muted); font-size: 11px; font-weight: 400;">
           ${p.issue_name || ""}
         </div>
@@ -1031,6 +1111,135 @@ function renderTable() {
     </tr>`;
   }).join("");
 }
+
+// ----------------------------------------------------------------------
+// Position detail modal — click on a ticker to see its aggregated data
+// + external research links. Aggregation matches the table row: all
+// positions of the same issue_id across accounts are combined.
+// ----------------------------------------------------------------------
+function openPositionModal(issueId) {
+  if (!issueId) return;
+  const positions = state.positionsFlat.filter(p => p.issue_id === issueId);
+  if (positions.length === 0) return;
+
+  // Aggregate across accounts (same math as the table).
+  const agg = {
+    issue_id: issueId,
+    issue_name: positions[0].issue_name || "",
+    _market_key: positions[0]._market_key,
+    quantity: 0, market_value: 0, yield_value: 0, average_cost: 0,
+    accounts: new Set(),
+  };
+  for (const p of positions) {
+    agg.quantity     += Number(p.quantity) || 0;
+    agg.market_value += Number(p.market_value) || 0;
+    agg.yield_value  += Number(p.yield_value) || 0;
+    agg.average_cost += Number(p.average_cost) || 0;
+    if (p._account_name) agg.accounts.add(p._account_name);
+  }
+  agg.avg_price  = agg.quantity > 0 ? agg.average_cost / agg.quantity : 0;
+  agg.last_price = agg.quantity > 0 ? agg.market_value / agg.quantity : 0;
+  agg.pl_pct     = agg.average_cost > 0 ? agg.yield_value / agg.average_cost : 0;
+
+  // Decimals: fractional shares (Trading USA) need 4 decimals; whole-
+  // share markets (BMV/SIC) look cleaner as integers.
+  const qtyDecimals = (agg.quantity % 1 === 0) ? 0 : 4;
+  const market = MARKETS[agg._market_key] || { label: "?", cls: "" };
+
+  document.getElementById("pm-ticker").textContent = issueId;
+  document.getElementById("pm-name").textContent = agg.issue_name || "—";
+
+  document.getElementById("pm-body").innerHTML = `
+    <div class="pm-grid">
+      <div class="pm-stat">
+        <div class="pm-label">Cantidad</div>
+        <div class="pm-value">${fmtMoney(agg.quantity, { decimals: qtyDecimals })}</div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-label">Precio promedio</div>
+        <div class="pm-value">${fmtMoney(agg.avg_price, { currency: true })}</div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-label">Último precio</div>
+        <div class="pm-value">${fmtMoney(agg.last_price, { currency: true })}</div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-label">Costo invertido</div>
+        <div class="pm-value">${fmtMoney(agg.average_cost, { currency: true })}</div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-label">Valor mercado</div>
+        <div class="pm-value"><strong>${fmtMoney(agg.market_value, { currency: true })}</strong></div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-label">P&L</div>
+        <div class="pm-value ${pnlClass(agg.yield_value)}">
+          ${fmtMoney(agg.yield_value, { sign: true, currency: true })}<br>
+          <span style="font-size:13px;">${fmtPct(agg.pl_pct)}</span>
+        </div>
+      </div>
+    </div>
+    <div class="pm-meta">
+      Mercado: <span class="market-pill ${market.cls}">${market.label}</span>
+      · Cuentas: <code>${[...agg.accounts].sort().join(", ") || "—"}</code>
+    </div>
+    <div class="pm-meta" style="font-size: 12px; margin-top: 16px;">
+      Los links abren en una pestaña nueva. No podemos embedder páginas
+      de research por <code>X-Frame-Options</code>.
+    </div>
+  `;
+
+  // Build market-aware external links. Tickers in SIC come with " *" suffix
+  // (e.g. "MU *") — strip it for clean lookups. FIBRAs often have suffixes
+  // like " 13" — keep them, they're part of the BMV ticker.
+  const cleanTicker = issueId.replace(/\s*\*\s*$/, "").trim();
+  const searchTerm = encodeURIComponent(
+    `${cleanTicker} ${agg.issue_name || ""} stock`.trim()
+  );
+  const links = [];
+  if (agg._market_key === "mercado_capitales") {
+    // BMV
+    links.push(
+      [`📊 Google Finance`, `https://www.google.com/finance/quote/${encodeURIComponent(cleanTicker)}:BMV`],
+      [`Yahoo Finance`,    `https://finance.yahoo.com/quote/${encodeURIComponent(cleanTicker)}.MX/`],
+      [`BMV emisora`,      `https://www.bmv.com.mx/es/emisoras/perfil/${encodeURIComponent(cleanTicker.replace(/\s.*$/, ""))}`],
+      [`Google`,           `https://www.google.com/search?q=${searchTerm}`],
+    );
+  } else if (agg._market_key === "mercados_globales_sic" ||
+             agg._market_key === "mercado_extranjero") {
+    // SIC or Trading USA — these are US-listed instruments
+    links.push(
+      [`📊 Google Finance`, `https://www.google.com/finance/quote/${encodeURIComponent(cleanTicker)}:NASDAQ`],
+      [`Yahoo Finance`,    `https://finance.yahoo.com/quote/${encodeURIComponent(cleanTicker)}/`],
+      [`Stock Analysis`,   `https://stockanalysis.com/stocks/${encodeURIComponent(cleanTicker.toLowerCase())}/`],
+      [`Google`,           `https://www.google.com/search?q=${searchTerm}`],
+    );
+  } else {
+    // Fondos / efectivo / unknown — no ticker lookup, just a search
+    links.push(
+      [`Google`, `https://www.google.com/search?q=${searchTerm}`],
+    );
+  }
+  document.getElementById("pm-links").innerHTML = links
+    .map(([label, url]) => `<a href="${url}" target="_blank" rel="noopener">${label} ↗</a>`)
+    .join("");
+
+  document.getElementById("pos-modal").classList.add("open");
+}
+
+function closePositionModal() {
+  document.getElementById("pos-modal").classList.remove("open");
+}
+
+// Close the position modal with Escape (in addition to the TOTP/config
+// modals which are handled by _shared.js). Order matters: this handler
+// runs first since it's registered last via the script tag, but we
+// always check `.open` so we don't fight the other handlers.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const m = document.getElementById("pos-modal");
+  if (m && m.classList.contains("open")) closePositionModal();
+});
 
 // All chrome (update button, TOTP modal, config modal, progress overlay,
 // Escape handler, first-run config prompt) lives in _shared.js. We hook

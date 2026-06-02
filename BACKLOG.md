@@ -23,9 +23,13 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
 - [ ] **Range pills (1W / 1M / 3M / 6M / 1Y / All)** en los gráficos
   cuando se agreguen. Patrón directo de TR. Trivial una vez que existan charts.
 
-- [ ] **Position detail modal con links externos** — click en una emisora
-  abre una card con info + links a Google Finance / Yahoo / página del
-  emisor / SIC bolsa de Madrid (para SIC). Patrón de TR.
+- [x] **Position detail modal con links externos** — implementado
+  2026-06-02. Click en un ticker abre un panel lateral con: cantidad,
+  precio promedio, último precio, costo invertido, valor mercado, P&L.
+  Links externos market-aware: BMV → Google Finance:BMV + Yahoo .MX +
+  página BMV; SIC/Trading USA → Google Finance + Yahoo + Stock Analysis;
+  fondos → solo Google search. Tickers con asterisco (SIC) se limpian
+  para los lookups. Ver `index.html::openPositionModal`.
 
 - [ ] **Página Glossary** (en español) — términos de inversión MX:
   ISR, IVA, SIC, BMV, FIBRA, repo, etc. Tab nueva en el top-bar.
