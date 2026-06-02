@@ -227,6 +227,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/export/transactions.csv":
             self._handle_export_transactions_csv()
             return
+        if self.path.startswith("/benchmark/"):
+            # /benchmark/{symbol} — proxy to Yahoo Finance with 24h cache.
+            symbol = self.path[len("/benchmark/"):].split("?", 1)[0]
+            self._handle_benchmark(symbol)
+            return
         if self.path == "/progress":
             text = ""
             if PROGRESS_FILE.exists():
@@ -319,6 +324,90 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "signout_detail": signout_detail,
             },
         )
+
+    def _handle_benchmark(self, symbol: str):
+        """Fetch Yahoo Finance monthly closes for ``symbol`` (cached 24h).
+
+        Browser fetches CAN'T hit Yahoo directly (CORS blocks the
+        public chart endpoint), so we proxy + cache server-side. The
+        cache lives at DATA/benchmark_cache/{symbol}.json. Cache hits
+        are < 5 ms; cache misses go out to Yahoo (~300-800 ms).
+
+        Accepts symbols like ``NAFTRACISHRS.MX`` (NAFTRAC BMV), ``SPY``
+        (S&P 500 ETF). Allowed characters: ``[A-Za-z0-9.^-]``. Any
+        other request is refused — this is a defensive measure since
+        the symbol is a path segment.
+        """
+        import re
+        import urllib.error
+        import urllib.request
+        from datetime import datetime, timedelta
+
+        if not re.fullmatch(r"[A-Za-z0-9.^_-]{1,40}", symbol):
+            self._json(400, {"status": "bad_request", "detail": "invalid symbol"})
+            return
+
+        cache_dir = DATA_DIR / "benchmark_cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_path = cache_dir / f"{symbol}.json"
+
+        # Cache hit?
+        if cache_path.exists():
+            try:
+                cached = json.loads(cache_path.read_text(encoding="utf-8"))
+                fetched_at = datetime.fromisoformat(cached.get("fetched_at", "1970-01-01T00:00:00"))
+                if (datetime.now() - fetched_at).total_seconds() < 24 * 3600:
+                    self._json(200, cached)
+                    return
+            except (json.JSONDecodeError, ValueError, KeyError, OSError):
+                pass  # corrupt cache → re-fetch
+
+        # Default window: last 5 years (good enough for any GBM user).
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365 * 5)
+        p1 = int(start_date.timestamp())
+        p2 = int(end_date.timestamp())
+        url = (
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+            f"?period1={p1}&period2={p2}&interval=1mo&events=history"
+        )
+
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                payload = json.loads(r.read().decode("utf-8"))
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError) as e:
+            self._json(
+                502,
+                {
+                    "status": "fetch_failed",
+                    "detail": f"yahoo fetch error: {type(e).__name__}: {e}",
+                    "symbol": symbol,
+                },
+            )
+            return
+
+        result = (payload.get("chart") or {}).get("result") or [{}]
+        result = result[0] if result else {}
+        timestamps = result.get("timestamp") or []
+        closes = ((result.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+        history = []
+        for t, c in zip(timestamps, closes):
+            if c is None:
+                continue
+            d = datetime.utcfromtimestamp(t).date().isoformat()
+            history.append({"date": d, "close": round(float(c), 4)})
+
+        body = {
+            "symbol": symbol,
+            "fetched_at": datetime.now().isoformat(timespec="seconds"),
+            "history": history,
+        }
+        try:
+            cache_path.write_text(json.dumps(body, indent=2), encoding="utf-8")
+        except OSError:
+            pass  # in-memory response is still fine
+        self._json(200, body)
 
     def _handle_export_transactions_csv(self):
         """Build a SAT-friendly CSV from the fetched transactions.

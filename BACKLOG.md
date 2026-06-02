@@ -95,9 +95,14 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
   si top > 50% o top-5 > 85%. Agrega cross-account, excluye efectivo.
   Ver `index.html::computeConcentration` + `renderConcentrationWarning`.
 
-- [ ] **Benchmark replay** — "qué hubiera pasado si invertía en NAFTRAC
-  en lugar de stock picking" (para BMV) y "vs S&P 500/SPY" (para
-  Trading USA). Equivalente al overlay MSCI World de TR.
+- [x] **Benchmark replay** — implementado 2026-06-02. Nuevo endpoint
+  server-side `GET /benchmark/{symbol}` proxea Yahoo Finance v8 chart
+  (cache 24h en `DATA/benchmark_cache/`). En Análisis, el chart de
+  "Capital invertido" ahora superpone NAFTRACISHRS.MX (línea ámbar
+  punteada) y SPY (verde punteada). Algoritmo: para cada mes con net
+  flow ≠ 0, allocate flow / close → cumulative units → value = units
+  × close. Mismo patrón que TR's replay_against_benchmark. Símbolos
+  validados por regex en el server (defensa contra path traversal).
 
 - [ ] **Lifetime P&L / Net capital in metric** — métrica que separa
   capital comprometido (depósitos − retiros) del rendimiento puro.

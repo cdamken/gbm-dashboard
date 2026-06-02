@@ -282,6 +282,13 @@ async function load() {
     state.transactions = transactions;
     state.lastUpdate = (lastUpdate || "").trim();
 
+    // Benchmarks: fetched lazily via /benchmark/{symbol} (24h cache).
+    // Errors don't block the page — the overlay just doesn't render.
+    state.benchmarks = await Promise.all([
+      safeJson("/benchmark/NAFTRACISHRS.MX"),
+      safeJson("/benchmark/SPY"),
+    ]);
+
     if (!accounts) {
       document.getElementById("error-box").innerHTML =
         `<div class="warning">
@@ -669,6 +676,47 @@ function renderDividendsChart() {
 // ----------------------------------------------------------------------
 let _histChart = null;
 let _histRange = "ALL";  // 1M / 3M / 6M / 1Y / ALL — last user choice
+
+// Replay the user's monthly net buys (buys − sells) against a benchmark.
+// For each month with a non-zero net flow, allocate the flow to benchmark
+// shares at that month's close. Value at month M = cumulative_shares * close(M).
+// This is the same metric as TR's replay_against_benchmark — apples to
+// apples with the cost-basis line.
+function _replayBenchmark(bench, dailyMap) {
+  if (!bench || !bench.history || bench.history.length === 0) return null;
+  if (!dailyMap || dailyMap.size === 0) return null;
+  const benchByMonth = {};
+  for (const h of bench.history) benchByMonth[h.date.slice(0, 7)] = h.close;
+
+  // Monthly net flow (delta of cost basis between consecutive months).
+  const dates = [...dailyMap.keys()].sort();
+  const monthlyDelta = {};
+  let prevValue = null;
+  for (const d of dates) {
+    const m = d.slice(0, 7);
+    const v = dailyMap.get(d);
+    if (prevValue == null) {
+      monthlyDelta[m] = v;
+    } else {
+      monthlyDelta[m] = (monthlyDelta[m] || 0) + (v - prevValue);
+    }
+    prevValue = v;
+  }
+
+  // Walk months in chronological order, accumulate units.
+  const months = Object.keys(monthlyDelta).sort();
+  let units = 0;
+  const out = {};  // date (1st of month) → value
+  for (const m of months) {
+    const close = benchByMonth[m];
+    if (!close || close <= 0) continue;
+    const delta = monthlyDelta[m];
+    if (delta !== 0) units += delta / close;
+    out[m + "-01"] = +(units * close).toFixed(2);
+  }
+  return out;
+}
+
 function renderNetWorthChart() {
   if (typeof window.Chart !== "function") return;
   const canvas = document.getElementById("history-chart");
@@ -746,26 +794,79 @@ function renderNetWorthChart() {
   canvas.style.display = "";
   emptyEl.style.display = "none";
 
+  // Benchmark replay overlays. Each is a sparse map (date → value); align
+  // to the user's filteredDates with nulls for missing months — Chart.js
+  // skips nulls cleanly. The MX benchmark (NAFTRAC) and USA (SPY) get
+  // separate colors. If a benchmark fetch failed earlier, the value is
+  // null and we skip its dataset entirely.
+  const [benchNAFTRAC, benchSPY] = state.benchmarks || [null, null];
+  const naftracMap = _replayBenchmark(benchNAFTRAC, dailyMap);
+  const spyMap     = _replayBenchmark(benchSPY,     dailyMap);
+  const alignBench = (m) => {
+    if (!m) return null;
+    // For each user date, find the value at the same month if any.
+    return filteredDates.map(d => m[d.slice(0, 7) + "-01"] ?? null);
+  };
+  const naftracValues = alignBench(naftracMap);
+  const spyValues = alignBench(spyMap);
+
+  const datasets = [
+    {
+      label: "Capital invertido (cost basis)",
+      data: values,
+      borderColor: "#60a5fa",
+      backgroundColor: "rgba(96, 165, 250, 0.10)",
+      borderWidth: 2,
+      fill: true,
+      tension: 0.15,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      pointHoverBackgroundColor: "#60a5fa",
+      pointHoverBorderColor: "#0f1419",
+      pointHoverBorderWidth: 2,
+    },
+  ];
+  if (naftracValues && naftracValues.some(v => v != null)) {
+    datasets.push({
+      label: "Si compraras NAFTRAC en su lugar",
+      data: naftracValues,
+      borderColor: "#fbbf24",
+      backgroundColor: "transparent",
+      borderWidth: 2,
+      borderDash: [6, 4],
+      fill: false,
+      tension: 0.15,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      pointHoverBackgroundColor: "#fbbf24",
+      pointHoverBorderColor: "#0f1419",
+      pointHoverBorderWidth: 2,
+      spanGaps: true,
+    });
+  }
+  if (spyValues && spyValues.some(v => v != null)) {
+    datasets.push({
+      label: "Si compraras SPY en su lugar",
+      data: spyValues,
+      borderColor: "#4ade80",
+      backgroundColor: "transparent",
+      borderWidth: 2,
+      borderDash: [2, 4],
+      fill: false,
+      tension: 0.15,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      pointHoverBackgroundColor: "#4ade80",
+      pointHoverBorderColor: "#0f1419",
+      pointHoverBorderWidth: 2,
+      spanGaps: true,
+    });
+  }
+
   if (_histChart) _histChart.destroy();
   _histChart = new window.Chart(canvas, {
     type: "line",
-    data: {
-      labels,
-      datasets: [{
-        label: "Capital invertido (cost basis)",
-        data: values,
-        borderColor: "#60a5fa",
-        backgroundColor: "rgba(96, 165, 250, 0.10)",
-        borderWidth: 2,
-        fill: true,
-        tension: 0.15,
-        pointRadius: 0,
-        pointHoverRadius: 5,
-        pointHoverBackgroundColor: "#60a5fa",
-        pointHoverBorderColor: "#0f1419",
-        pointHoverBorderWidth: 2,
-      }],
-    },
+    data: { labels, datasets },
     options: {
       maintainAspectRatio: false,
       animation: { duration: 600, easing: "easeOutQuart" },
@@ -798,7 +899,23 @@ function renderNetWorthChart() {
         },
       },
       plugins: {
-        legend: { display: false },
+        legend: {
+          // Show the legend when there are 2+ datasets (benchmark overlays
+          // are loaded). With just the single cost-basis line, hiding it
+          // keeps the chart cleaner.
+          display: datasets.length > 1,
+          position: "top",
+          align: "end",
+          labels: {
+            color: "#e8eef5",
+            font: { size: 11, weight: "600" },
+            usePointStyle: true,
+            pointStyle: "line",
+            boxWidth: 24,
+            boxHeight: 2,
+            padding: 12,
+          },
+        },
         tooltip: {
           backgroundColor: "#0f1419",
           titleColor: "#e8eef5",
