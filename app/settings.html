@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>GBM Configuración</title>
+<style>
+:root {
+  --bg: #0f1419;
+  --card: #1a1f2e;
+  --border: #2a3142;
+  --text: #e8eef5;
+  --muted: #7a8599;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+  --purple: #c084fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5;
+}
+
+.subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+
+.green { color: var(--green); }
+.red { color: var(--red); }
+.amber { color: var(--amber); }
+.blue { color: var(--blue); }
+.muted { color: var(--muted); }
+
+/* ---------- Settings layout ---------- */
+.settings-grid {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+.settings-side {
+  display: flex; flex-direction: column; gap: 4px;
+  position: sticky; top: 80px;
+}
+.settings-side a {
+  color: var(--muted); text-decoration: none;
+  padding: 10px 14px; border-radius: 8px;
+  font-size: 14px; font-weight: 500;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.settings-side a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.settings-side a.active {
+  color: var(--blue);
+  background: rgba(96, 165, 250, 0.08);
+  border-left-color: var(--blue);
+}
+.settings-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 28px;
+  margin-bottom: 20px;
+  scroll-margin-top: 72px;
+}
+.settings-section h2 {
+  font-size: 18px; margin-bottom: 4px; font-weight: 700;
+  display: flex; align-items: center; gap: 8px;
+}
+.settings-section .section-desc {
+  color: var(--muted); font-size: 13px; margin-bottom: 20px;
+}
+.settings-row { margin-bottom: 16px; }
+.settings-row label {
+  display: block; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.7px; color: var(--muted);
+  font-weight: 600; margin-bottom: 6px;
+}
+.settings-row input {
+  width: 100%;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); padding: 10px 14px; border-radius: 8px;
+  font-size: 14px; font-family: inherit;
+}
+.settings-row input:focus { outline: none; border-color: var(--blue); }
+.settings-row input[type="number"] { max-width: 180px; }
+.settings-actions {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  margin-top: 20px; padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.settings-actions button {
+  padding: 9px 18px; border-radius: 8px; border: none;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.settings-actions button.primary { background: var(--blue); color: var(--bg); }
+.settings-actions button.primary:hover { background: #93c5fd; }
+.settings-actions button.primary:disabled { opacity: 0.5; cursor: wait; }
+.settings-actions button.ghost {
+  background: transparent; color: var(--muted); border: 1px solid var(--border);
+}
+.settings-actions button.ghost:hover { color: var(--text); border-color: var(--muted); }
+.settings-actions button.danger {
+  background: transparent; color: var(--red); border: 1px solid var(--red);
+}
+.settings-actions button.danger:hover { background: rgba(248, 113, 113, 0.10); }
+
+.flash {
+  margin-top: 12px; padding: 10px 14px; border-radius: 8px;
+  font-size: 13px; display: none;
+}
+.flash.show { display: block; }
+.flash.ok    { background: rgba(74, 222, 128, 0.10); color: var(--green); border-left: 3px solid var(--green); }
+.flash.err   { background: rgba(248, 113, 113, 0.10); color: var(--red);   border-left: 3px solid var(--red); }
+
+.about-list {
+  list-style: none; padding: 0; margin: 0;
+}
+.about-list li {
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+  font-size: 13px; display: flex; justify-content: space-between; gap: 12px;
+}
+.about-list li:last-child { border-bottom: none; }
+.about-list li .label { color: var(--muted); }
+.about-list li .value { font-family: monospace; color: var(--text); }
+.about-list a { color: var(--blue); text-decoration: none; }
+.about-list a:hover { text-decoration: underline; }
+
+.disclaimer {
+  margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; line-height: 1.6;
+}
+.disclaimer a { color: var(--blue); text-decoration: none; }
+
+@media (max-width: 820px) {
+  .settings-grid { grid-template-columns: 1fr; }
+  .settings-side { position: static; flex-direction: row; flex-wrap: wrap; }
+  .settings-side a { border-left: none; border-bottom: 3px solid transparent; }
+  .settings-side a.active { border-left: none; border-bottom-color: var(--blue); }
+}
+</style>
+</head>
+<body data-tab="settings">
+
+<!-- Top-bar (brand + tabs + ⟳ Actualizar) is injected by _shared.js. -->
+<div class="subtitle">
+  Configura credenciales, rangos de descarga, y revisa información de la sesión.
+</div>
+
+<div class="settings-grid">
+  <aside class="settings-side">
+    <a href="#s-account" class="active" data-section="s-account">👤 Cuenta</a>
+    <a href="#s-data" data-section="s-data">📊 Rangos de datos</a>
+    <a href="#s-session" data-section="s-session">🔐 Sesión</a>
+    <a href="#s-about" data-section="s-about">ℹ️ Acerca de</a>
+  </aside>
+
+  <div>
+    <!-- ---------- Cuenta GBM+ ---------- -->
+    <section class="settings-section" id="s-account">
+      <h2>👤 Cuenta GBM+</h2>
+      <p class="section-desc">
+        Email y contraseña para autenticar con GBM+. Se guardan en
+        <code>app/.env</code> con permisos 0600 y nunca salen de tu máquina.
+        Cambiar de email aquí vacía la sesión y el caché — el siguiente
+        ⟳ Actualizar pedirá TOTP de la nueva cuenta.
+      </p>
+      <div class="settings-row">
+        <label for="email-input">Email</label>
+        <input
+          type="email" id="email-input"
+          autocomplete="username"
+          placeholder="tu-email@dominio.com"
+        >
+      </div>
+      <div class="settings-row">
+        <label for="password-input">Contraseña</label>
+        <input
+          type="password" id="password-input"
+          autocomplete="current-password"
+          placeholder="••••••••"
+        >
+      </div>
+      <div class="flash" id="account-flash"></div>
+      <div class="settings-actions">
+        <button class="primary" id="save-account-btn" type="button">Guardar credenciales</button>
+      </div>
+    </section>
+
+    <!-- ---------- Días hacia atrás ---------- -->
+    <section class="settings-section" id="s-data">
+      <h2>📊 Rangos de datos</h2>
+      <p class="section-desc">
+        Cuántos días hacia atrás bajar al hacer ⟳ Actualizar. Valores
+        mayores → más datos pero el fetch tarda más. Defaults: órdenes 90,
+        dividendos y libro diario 365.
+      </p>
+      <div class="settings-row">
+        <label for="orders-days-input">Órdenes (días)</label>
+        <input type="number" id="orders-days-input" min="1" max="3650">
+      </div>
+      <div class="settings-row">
+        <label for="dividends-days-input">Dividendos (días)</label>
+        <input type="number" id="dividends-days-input" min="1" max="3650">
+      </div>
+      <div class="settings-row">
+        <label for="transactions-days-input">Libro Diario (días)</label>
+        <input type="number" id="transactions-days-input" min="1" max="3650">
+      </div>
+      <div class="flash" id="data-flash"></div>
+      <div class="settings-actions">
+        <button class="primary" id="save-data-btn" type="button">Guardar rangos</button>
+      </div>
+    </section>
+
+    <!-- ---------- Sesión ---------- -->
+    <section class="settings-section" id="s-session">
+      <h2>🔐 Sesión</h2>
+      <p class="section-desc">
+        El access token de Cognito dura 1 hora. El refresh token dura ~30
+        días — el dashboard lo usa silenciosamente para renovar el access
+        sin pedirte TOTP. Si revocas la sesión (botón abajo), el próximo
+        ⟳ Actualizar abre el modal TOTP.
+      </p>
+      <ul class="about-list" id="session-info">
+        <li><span class="label">Cargando…</span><span class="value">—</span></li>
+      </ul>
+      <div class="flash" id="session-flash"></div>
+      <div class="settings-actions">
+        <button class="ghost" id="refresh-session-btn" type="button">
+          Refrescar sesión ahora
+        </button>
+        <button class="danger" id="revoke-session-btn" type="button">
+          Cerrar sesión y limpiar caché
+        </button>
+      </div>
+    </section>
+
+    <!-- ---------- Acerca de ---------- -->
+    <section class="settings-section" id="s-about">
+      <h2>ℹ️ Acerca de</h2>
+      <p class="section-desc">
+        Dashboard local para GBM+. 100% loopback, cero telemetría.
+      </p>
+      <ul class="about-list">
+        <li><span class="label">Versión del dashboard</span><span class="value" id="about-dashboard-version">—</span></li>
+        <li><span class="label">Versión de gbm-mx-api</span><span class="value" id="about-api-version">—</span></li>
+        <li><span class="label">Servidor</span><span class="value">localhost:8086 (loopback)</span></li>
+        <li><span class="label">Credenciales</span><span class="value">app/.env (0600)</span></li>
+        <li><span class="label">Sesión</span><span class="value">~/.gbm-mx/session.json (0600)</span></li>
+        <li><span class="label">Código</span><span class="value"><a href="https://github.com/cdamken/gbm-mx-api" target="_blank">github.com/cdamken/gbm-mx-api</a></span></li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<div class="disclaimer">
+  Dashboard no oficial · <span style="font-family: monospace;" data-version></span> · datos vía
+  <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
+  No afiliado con Grupo Bursátil Mexicano.
+</div>
+
+<script src="/app/_shared.js"></script>
+<script>
+// ----------------------------------------------------------------------
+// Settings page — load + save handlers
+// ----------------------------------------------------------------------
+async function loadAll() {
+  // Account
+  try {
+    const r = await fetch("/config", { cache: "no-store" });
+    const c = await r.json();
+    if (c.email) document.getElementById("email-input").value = c.email;
+  } catch (_) {}
+
+  // Days + versions
+  try {
+    const r = await fetch("/settings", { cache: "no-store" });
+    const s = await r.json();
+    document.getElementById("orders-days-input").value       = s.orders_days ?? 90;
+    document.getElementById("dividends-days-input").value    = s.dividends_days ?? 365;
+    document.getElementById("transactions-days-input").value = s.transactions_days ?? 365;
+    document.getElementById("about-dashboard-version").textContent = s.dashboard_version || "—";
+    document.getElementById("about-api-version").textContent       = s.gbm_mx_api_version || "—";
+  } catch (_) {}
+
+  await loadSessionInfo();
+}
+
+async function loadSessionInfo() {
+  const ul = document.getElementById("session-info");
+  // The session file lives at ~/.gbm-mx/session.json — the server doesn't
+  // expose its contents. We infer state from /config (configured?) and
+  // show what we know. A future endpoint could surface seconds_remaining.
+  try {
+    const r = await fetch("/config", { cache: "no-store" });
+    const c = await r.json();
+    ul.innerHTML = c.configured
+      ? `<li><span class="label">Credenciales</span><span class="value green">guardadas (${c.email})</span></li>
+         <li><span class="label">TOTP</span><span class="value muted">solo cuando expire el refresh token (~30 días)</span></li>`
+      : `<li><span class="label">Credenciales</span><span class="value red">sin configurar</span></li>`;
+  } catch (_) {
+    ul.innerHTML = `<li><span class="label">Estado</span><span class="value red">no se pudo consultar</span></li>`;
+  }
+}
+
+function flash(el, ok, msg) {
+  el.textContent = msg;
+  el.className = "flash show " + (ok ? "ok" : "err");
+  if (ok) setTimeout(() => el.classList.remove("show"), 3500);
+}
+
+async function saveAccount() {
+  const email    = document.getElementById("email-input").value.trim();
+  const password = document.getElementById("password-input").value;
+  const flashEl  = document.getElementById("account-flash");
+  const btn      = document.getElementById("save-account-btn");
+
+  if (!email || !email.includes("@")) {
+    flash(flashEl, false, "Email inválido.");
+    return;
+  }
+  if (!password || password.length < 4) {
+    flash(flashEl, false, "Contraseña muy corta.");
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = "Guardando…";
+  try {
+    const r = await fetch("/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const p = await r.json();
+    if (r.ok && p.status === "ok") {
+      const msg = p.account_changed
+        ? "Credenciales guardadas. Cuenta nueva detectada — sesión + caché limpiados. Dale ⟳ Actualizar para autenticar."
+        : "Credenciales guardadas.";
+      flash(flashEl, true, msg);
+      document.getElementById("password-input").value = "";
+      await loadSessionInfo();
+    } else {
+      flash(flashEl, false, p.detail || "No se pudo guardar.");
+    }
+  } catch (e) {
+    flash(flashEl, false, "Error de conexión: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Guardar credenciales";
+  }
+}
+
+async function saveData() {
+  const flashEl = document.getElementById("data-flash");
+  const btn     = document.getElementById("save-data-btn");
+  const payload = {
+    orders_days:       parseInt(document.getElementById("orders-days-input").value, 10),
+    dividends_days:    parseInt(document.getElementById("dividends-days-input").value, 10),
+    transactions_days: parseInt(document.getElementById("transactions-days-input").value, 10),
+  };
+  for (const k of Object.keys(payload)) {
+    if (!Number.isFinite(payload[k]) || payload[k] < 1 || payload[k] > 3650) {
+      flash(flashEl, false, "Cada valor debe estar entre 1 y 3650 días.");
+      return;
+    }
+  }
+  btn.disabled = true; btn.textContent = "Guardando…";
+  try {
+    const r = await fetch("/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const p = await r.json();
+    if (r.ok && p.status === "ok") {
+      flash(flashEl, true, "Rangos guardados. Aplican al próximo ⟳ Actualizar.");
+    } else {
+      flash(flashEl, false, p.detail || "No se pudo guardar.");
+    }
+  } catch (e) {
+    flash(flashEl, false, "Error de conexión: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Guardar rangos";
+  }
+}
+
+async function refreshSessionNow() {
+  const flashEl = document.getElementById("session-flash");
+  flash(flashEl, true, "Refrescando sesión silenciosamente…");
+  // We don't have a dedicated /refresh endpoint — triggering /update is
+  // the simplest path: it loads the saved session, auto-refreshes if
+  // needed, and surfaces the same error states as the regular button.
+  triggerUpdate();
+}
+
+async function revokeSession() {
+  if (!confirm("Esto borra la sesión local y todos los datos descargados. El próximo ⟳ Actualizar pedirá TOTP. ¿Continuar?")) {
+    return;
+  }
+  const flashEl = document.getElementById("session-flash");
+  const btn = document.getElementById("revoke-session-btn");
+  btn.disabled = true;
+  try {
+    const r = await fetch("/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const p = await r.json();
+    if (r.ok && p.status === "ok") {
+      flash(flashEl, true, "Sesión + caché borrados. Dale ⟳ Actualizar para autenticar de nuevo.");
+      await loadSessionInfo();
+    } else {
+      flash(flashEl, false, p.detail || "No se pudo revocar.");
+    }
+  } catch (e) {
+    flash(flashEl, false, "Error de conexión: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Highlight the active sidebar link as the user scrolls.
+function wireSidebarScrollspy() {
+  const links = document.querySelectorAll(".settings-side a");
+  const sections = [...links].map(a =>
+    document.getElementById(a.dataset.section)
+  ).filter(Boolean);
+  const observer = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      links.forEach(a => a.classList.toggle(
+        "active", a.dataset.section === e.target.id
+      ));
+    }
+  }, { rootMargin: "-30% 0px -60% 0px", threshold: 0 });
+  for (const s of sections) observer.observe(s);
+}
+
+document.getElementById("save-account-btn").addEventListener("click", saveAccount);
+document.getElementById("save-data-btn").addEventListener("click", saveData);
+document.getElementById("refresh-session-btn").addEventListener("click", refreshSessionNow);
+document.getElementById("revoke-session-btn").addEventListener("click", revokeSession);
+
+document.getElementById("password-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") saveAccount();
+});
+
+// Settings doesn't render dashboard data, so a successful /update just
+// refreshes the session info card.
+window.onUpdateComplete = loadSessionInfo;
+
+loadAll();
+wireSidebarScrollspy();
+</script>
+</body>
+</html>

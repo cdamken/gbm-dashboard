@@ -92,15 +92,14 @@ def _is_configured(env: dict[str, str]) -> bool:
     return True
 
 
-def _write_env(email: str, password: str) -> None:
-    """Write a new .env atomically with 0600 perms.
+def _write_env_keys(updates: dict[str, str]) -> None:
+    """Merge ``updates`` into ``app/.env``, writing atomically with 0600 perms.
 
-    Preserves any other keys that were in .env (e.g. GBM_CLIENT_ID,
-    GBM_LATITUDE) so the user can still tweak them by hand if needed.
+    Preserves any other keys that were in .env so the user can still
+    tweak them by hand if needed.
     """
-    existing = _parse_env(ENV_FILE)
-    existing["GBM_EMAIL"] = email
-    existing["GBM_PASSWORD"] = password
+    merged = _parse_env(ENV_FILE)
+    merged.update(updates)
 
     APP_DIR.mkdir(parents=True, exist_ok=True)
     tmp = ENV_FILE.with_suffix(".env.tmp")
@@ -109,13 +108,27 @@ def _write_env(email: str, password: str) -> None:
         "# Edit by hand if you prefer.",
         "",
     ]
-    for k, v in existing.items():
+    for k, v in merged.items():
         # Wrap in single quotes so special chars ($, =, spaces) stay literal.
         # The parser strips outer quotes on read.
         lines.append(f"{k}='{v}'")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.chmod(tmp, 0o600)
     tmp.replace(ENV_FILE)
+
+
+def _write_env(email: str, password: str) -> None:
+    """Convenience: persist credentials only."""
+    _write_env_keys({"GBM_EMAIL": email, "GBM_PASSWORD": password})
+
+
+# Days-back env keys controllable from the Settings page. Defaults
+# match the fallbacks in fetch_data.py.
+_DAYS_KEYS = {
+    "orders_days":       ("GBM_ORDERS_DAYS",       90),
+    "dividends_days":    ("GBM_DIVIDENDS_DAYS",   365),
+    "transactions_days": ("GBM_TRANSACTIONS_DAYS", 365),
+}
 
 
 def _wipe_session_and_data() -> None:
@@ -168,11 +181,48 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     # GET
     # ------------------------------------------------------------------
     def do_GET(self):
+        # Send the bare host straight to the dashboard so users don't
+        # have to remember /app/index.html. Also blocks the default
+        # directory listing for any other folder (/.git/, /DATA/, etc.)
+        # — on a loopback-only server it's not a security hole, just
+        # noise that exposes filesystem structure.
+        # Includes `/app` and `/app/` so the user can also type just
+        # `localhost:8086/app` and land on the dashboard (otherwise the
+        # stdlib http.server 301s to `/app/`, which then hits the
+        # directory-listing block below).
+        if self.path in ("", "/", "/app", "/app/"):
+            self.send_response(302)
+            self.send_header("Location", "/app/index.html")
+            self.end_headers()
+            return
+        if self.path.endswith("/"):
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"Directory listing disabled. Go to /app/index.html\n")
+            return
         if self.path == "/config":
             env = _parse_env(ENV_FILE)
             configured = _is_configured(env)
             email = env.get("GBM_EMAIL", "") if configured else None
             self._json(200, {"configured": configured, "email": email})
+            return
+        if self.path == "/settings":
+            env = _parse_env(ENV_FILE)
+            payload: dict[str, object] = {}
+            for js_key, (env_key, default) in _DAYS_KEYS.items():
+                raw = env.get(env_key, "").strip()
+                try:
+                    payload[js_key] = int(raw) if raw else default
+                except ValueError:
+                    payload[js_key] = default
+            payload["dashboard_version"] = "0.13.0"
+            try:
+                from gbm_mx_api import __version__ as _api_version
+                payload["gbm_mx_api_version"] = _api_version
+            except Exception:
+                payload["gbm_mx_api_version"] = "unknown"
+            self._json(200, payload)
             return
         if self.path == "/progress":
             text = ""
@@ -205,11 +255,56 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/config":
             self._handle_config()
             return
+        if self.path == "/settings":
+            self._handle_settings()
+            return
+        if self.path == "/reset":
+            self._handle_reset()
+            return
         if self.path == "/update":
             self._handle_update()
             return
         self.send_response(404)
         self.end_headers()
+
+    def _handle_reset(self):
+        """Wipe the cached session + DATA so the next update forces a fresh TOTP.
+
+        Credentials in app/.env are kept — the user explicitly asked to
+        revoke the session, not to log out completely. To rotate
+        credentials, use the Cuenta section.
+        """
+        _wipe_session_and_data()
+        self._json(200, {"status": "ok"})
+
+    def _handle_settings(self):
+        """Persist the configurable days-back values to .env."""
+        body = self._read_json_body()
+        if body is None:
+            return
+        updates: dict[str, str] = {}
+        for js_key, (env_key, _default) in _DAYS_KEYS.items():
+            raw = body.get(js_key)
+            if raw is None:
+                continue
+            try:
+                n = int(raw)
+            except (TypeError, ValueError):
+                self._json(400, {"status": "bad_request", "detail": f"{js_key} must be an integer"})
+                return
+            if not (1 <= n <= 3650):
+                self._json(400, {"status": "bad_request", "detail": f"{js_key} must be 1..3650"})
+                return
+            updates[env_key] = str(n)
+        if not updates:
+            self._json(400, {"status": "bad_request", "detail": "no settings provided"})
+            return
+        try:
+            _write_env_keys(updates)
+        except OSError as e:
+            self._json(500, {"status": "error", "detail": str(e)})
+            return
+        self._json(200, {"status": "ok"})
 
     def _handle_config(self):
         body = self._read_json_body()

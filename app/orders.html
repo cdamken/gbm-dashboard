@@ -144,21 +144,12 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </head>
 <body>
 
-<h1>
-  <div class="logo-box">GBM</div>
-  Órdenes
-</h1>
+<!-- Top-bar (brand + tabs + ⟳ Actualizar) is injected by _shared.js. -->
 <div class="subtitle">
   <span id="range-label">Rango: cargando...</span> ·
   Cuenta: <span id="account-label">—</span> ·
   Última actualización: <span id="last-update">—</span>
-</div>
-
-<div class="nav">
-  <a href="/app/index.html">📊 Portafolio</a>
-  <a href="/app/orders.html" class="active">📋 Órdenes</a>
-  <a href="/app/dividends.html">💰 Dividendos</a>
-  <a href="/app/transactions.html">📒 Libro Diario</a>
+  <!-- staleness chip is injected by _shared.js -->
 </div>
 
 <div id="error-box"></div>
@@ -323,9 +314,10 @@ async function load() {
     ]);
     if (!data) {
       document.getElementById("error-box").innerHTML =
-        `<div class="error"><b>No hay datos de órdenes todavía.</b><br>
-         Ve a <a href="/app/index.html" style="color: var(--blue);">Portafolio</a>
-         y dale ⟳ Actualizar — se descargarán las órdenes de los últimos 90 días.</div>`;
+        `<div class="warning">
+          <b>No hay datos de órdenes todavía.</b>
+          Dale <b>⟳ Actualizar</b> arriba — se descargarán las órdenes de los últimos 90 días.
+        </div>`;
       return;
     }
     state.orders = data.orders || [];
@@ -592,6 +584,10 @@ function renderTable() {
     </tr>`;
   }).join("") || `<tr><td colspan="10" class="empty">Sin órdenes que coincidan con los filtros</td></tr>`;
 }
+
+// Hook for the shared update flow in _shared.js: re-render in place
+// after a successful /update instead of doing a full page reload.
+window.onUpdateComplete = load;
 
 load();
 </script>

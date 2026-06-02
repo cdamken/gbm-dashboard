@@ -7,6 +7,8 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>GBM Portfolio Dashboard</title>
+<!-- Portfolio page is data-tables only since 2026-06-02.
+     Charts moved to /app/analysis.html — Chart.js loads only there. -->
 <style>
 :root {
   --bg: #0f1419;
@@ -38,31 +40,7 @@ h1 {
 }
 
 .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
-.staleness-chip {
-  display: none; margin-left: 8px;
-  padding: 2px 8px; border-radius: 10px;
-  font-size: 11px; font-weight: 600;
-  vertical-align: middle;
-}
-.staleness-chip.show { display: inline-block; }
-.staleness-chip.fresh { background: rgba(74, 222, 128, 0.15); color: var(--green); }
-.staleness-chip.warn  { background: rgba(251, 191, 36, 0.18); color: var(--amber); }
-.staleness-chip.stale { background: rgba(248, 113, 113, 0.22); color: var(--red); }
-.subtitle .update-btn {
-  margin-left: 12px;
-  background: var(--card); border: 1px solid var(--border);
-  color: var(--blue); padding: 4px 12px; border-radius: 6px;
-  cursor: pointer; font-size: 12px;
-}
-.subtitle .update-btn:hover { background: rgba(96, 165, 250, 0.1); }
-.subtitle .update-btn:disabled { opacity: 0.5; cursor: wait; }
-.subtitle .settings-btn {
-  margin-left: 6px;
-  background: var(--card); border: 1px solid var(--border);
-  color: var(--muted); padding: 4px 10px; border-radius: 6px;
-  cursor: pointer; font-size: 12px;
-}
-.subtitle .settings-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+/* Staleness chip + .update-btn + .settings-btn live in _shared.js. */
 
 .nav { display: flex; gap: 8px; margin-bottom: 24px; }
 .nav a {
@@ -190,6 +168,14 @@ tr:hover { background: rgba(255,255,255,0.02); }
   color: var(--text);
 }
 .warning b { color: var(--amber); }
+.warning.severe {
+  background: rgba(248, 113, 113, 0.10);
+  border-left-color: var(--red);
+}
+.warning.severe b { color: var(--red); }
+.warning .detail {
+  color: var(--muted); font-size: 12px; margin-top: 4px;
+}
 .error {
   background: rgba(248, 113, 113, 0.1); border-left: 4px solid var(--red);
   padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px;
@@ -202,109 +188,16 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .disclaimer a { color: var(--blue); text-decoration: none; }
 .disclaimer a:hover { text-decoration: underline; }
 
-/* ----- modal ----- */
-.modal-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.65);
-  display: none; align-items: center; justify-content: center;
-  z-index: 100; backdrop-filter: blur(4px);
-}
-.modal-backdrop.show { display: flex; }
-.modal {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 12px; padding: 28px; max-width: 420px; width: 90%;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-}
-.modal h2 { font-size: 18px; margin-bottom: 8px; }
-.modal p { color: var(--muted); font-size: 13px; margin-bottom: 20px; line-height: 1.5; }
-.modal input.totp {
-  width: 100%; background: var(--bg); border: 2px solid var(--border);
-  color: var(--text); padding: 14px; border-radius: 8px;
-  font-size: 24px; font-family: monospace; text-align: center;
-  letter-spacing: 8px; margin-bottom: 16px;
-}
-.modal input.totp:focus { outline: none; border-color: var(--blue); }
-.modal label {
-  display: block; font-size: 12px; text-transform: uppercase;
-  letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;
-  margin-top: 14px; font-weight: 600;
-}
-.modal label:first-of-type { margin-top: 0; }
-.modal input.field {
-  width: 100%; background: var(--bg); border: 1px solid var(--border);
-  color: var(--text); padding: 12px 14px; border-radius: 8px;
-  font-size: 14px; font-family: -apple-system, sans-serif;
-}
-.modal input.field:focus { outline: none; border-color: var(--blue); }
-.modal .modal-btns { display: flex; gap: 12px; justify-content: flex-end; }
-.modal button {
-  padding: 10px 20px; border-radius: 8px; border: none;
-  font-size: 14px; cursor: pointer; font-weight: 600;
-}
-.modal button.primary { background: var(--blue); color: var(--bg); }
-.modal button.primary:hover { background: #93c5fd; }
-.modal button.primary:disabled { opacity: 0.5; cursor: wait; }
-.modal button.secondary {
-  background: transparent; color: var(--muted); border: 1px solid var(--border);
-}
-.modal button.secondary:hover { color: var(--text); }
-.modal .modal-error {
-  background: rgba(248, 113, 113, 0.1); border-left: 3px solid var(--red);
-  padding: 10px 14px; border-radius: 6px; font-size: 13px;
-  margin-bottom: 16px; color: var(--red);
-}
-.modal .modal-error.hidden { display: none; }
-.modal .modal-hint {
-  font-size: 11px; color: var(--muted); margin-top: 12px; text-align: center;
-}
-
-/* ----- progress overlay ----- */
-.progress-overlay {
-  position: fixed; inset: 0; background: rgba(15, 20, 25, 0.92);
-  display: none; align-items: center; justify-content: center;
-  z-index: 200; backdrop-filter: blur(8px);
-}
-.progress-overlay.show { display: flex; }
-.progress-box {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 12px; padding: 32px; max-width: 540px; width: 92%;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-  text-align: center;
-}
-.progress-box h2 { font-size: 22px; margin-bottom: 12px; }
-.progress-box .progress-stage {
-  color: var(--text); font-size: 15px; margin-bottom: 8px; min-height: 22px;
-  transition: opacity 0.2s;
-}
-.progress-box .progress-hint {
-  color: var(--muted); font-size: 12px; line-height: 1.5;
-}
-.spinner {
-  width: 56px; height: 56px; margin: 8px auto 24px;
-  border: 4px solid var(--border); border-top-color: var(--blue);
-  border-radius: 50%; animation: spin 0.9s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
+/* Modal + progress overlay styles live in _shared.js (chrome). */
 </style>
 </head>
 <body>
 
-<h1>
-  <div class="logo-box">GBM</div>
-  Portfolio Dashboard
-</h1>
+<!-- Top-bar (brand + tabs + ⟳ Actualizar) is injected by _shared.js. -->
 <div class="subtitle">
   <span id="contract-label">Contrato: cargando...</span> · Última actualización:
   <span id="last-update">—</span>
-  <span id="last-update-age" class="staleness-chip"></span>
-  <button class="update-btn" id="update-btn" onclick="triggerUpdate()">⟳ Actualizar</button>
-  <button class="settings-btn" id="settings-btn" onclick="openConfigModal()" title="Configurar credenciales">⚙ Cuenta</button>
-</div>
-
-<div class="nav">
-  <a href="/app/index.html" class="active">📊 Portafolio</a>
-  <a href="/app/orders.html">📋 Órdenes</a>
-  <a href="/app/dividends.html">💰 Dividendos</a>
-  <a href="/app/transactions.html">📒 Libro Diario</a>
+  <!-- staleness chip is injected by _shared.js -->
 </div>
 
 <div id="error-box"></div>
@@ -321,6 +214,11 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <div class="value" id="total-pnl">—</div>
     <div class="delta" id="total-pnl-pct">—</div>
   </div>
+  <div class="card" title="Annualized money-weighted return (XIRR) using external deposits/withdrawals as cashflows and today's portfolio value as terminal. Only sees the last 365 days of transactions — older flows can't be retrieved from GBM's API.">
+    <div class="label">XIRR (anualizado)</div>
+    <div class="value" id="xirr-value">—</div>
+    <div class="delta muted" id="xirr-detail">basado en flujos externos</div>
+  </div>
   <div class="card">
     <div class="label">Posiciones</div>
     <div class="value" id="num-positions">—</div>
@@ -332,6 +230,11 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <div class="delta muted">estrategias del contrato</div>
   </div>
 </div>
+
+<!-- Concentration warning (rendered conditionally by JS based on portfolio share) -->
+<div id="concentration-warning"></div>
+
+<!-- The allocation chart moved to /app/analysis.html (📈 Análisis tab). -->
 
 <!-- ---------- accounts ---------- -->
 <div class="section">
@@ -412,88 +315,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
   No afiliado con Grupo Bursátil Mexicano.
 </div>
 
-<!-- ------------- Config modal (email + password) ------------- -->
-<div class="modal-backdrop" id="config-modal" onclick="closeModalIfBackdrop(event, 'config')">
-  <div class="modal" onclick="event.stopPropagation()">
-    <h2>⚙ Configuración de cuenta GBM+</h2>
-    <p>
-      Estas credenciales se guardan en <code>app/.env</code> (permisos
-      <code>0600</code>, solo tu usuario las puede leer) y nunca salen de
-      tu máquina. Si tienes 2FA activado, el código TOTP se pedirá
-      después al actualizar.
-    </p>
-    <div class="modal-error hidden" id="config-error"></div>
-    <label for="config-email">Email</label>
-    <input
-      type="email"
-      class="field"
-      id="config-email"
-      autocomplete="username"
-      placeholder="tu-email@dominio.com"
-      oninput="onConfigInput()"
-    >
-    <label for="config-password">Contraseña</label>
-    <input
-      type="password"
-      class="field"
-      id="config-password"
-      autocomplete="current-password"
-      placeholder="••••••••"
-      oninput="onConfigInput()"
-      onkeydown="if (event.key === 'Enter') submitConfig()"
-    >
-    <div style="height: 20px;"></div>
-    <div class="modal-btns">
-      <button class="secondary" onclick="closeConfigModal()">Cancelar</button>
-      <button class="primary" id="config-submit" onclick="submitConfig()" disabled>Guardar</button>
-    </div>
-    <div class="modal-hint">
-      Todo es local. Cero telemetría. Cero envío fuera de tu computadora.
-    </div>
-  </div>
-</div>
-
-<!-- ------------- TOTP modal ------------- -->
-<div class="modal-backdrop" id="totp-modal" onclick="closeModalIfBackdrop(event)">
-  <div class="modal" onclick="event.stopPropagation()">
-    <h2>🔐 Código de seguridad</h2>
-    <p>
-      Tu sesión expiró. Abre tu app autenticadora (Google Authenticator /
-      Authy / la que uses) y teclea el código de <b>6 dígitos</b> para GBM+.
-    </p>
-    <div class="modal-error hidden" id="totp-error"></div>
-    <input
-      type="text"
-      class="totp"
-      id="totp-input"
-      maxlength="6"
-      inputmode="numeric"
-      autocomplete="off"
-      placeholder="000000"
-      oninput="onTotpInput(event)"
-      onkeydown="if (event.key === 'Enter') submitTotp()"
-    >
-    <div class="modal-btns">
-      <button class="secondary" onclick="closeModal()">Cancelar</button>
-      <button class="primary" id="totp-submit" onclick="submitTotp()">Actualizar</button>
-    </div>
-    <div class="modal-hint">
-      El código cambia cada 30 segundos. Sin guardar en disco.
-    </div>
-  </div>
-</div>
-
-<!-- ------------- Progress overlay (shown while fetching) ------------- -->
-<div class="progress-overlay" id="progress-overlay">
-  <div class="progress-box">
-    <div class="spinner"></div>
-    <h2>Actualizando tu portafolio</h2>
-    <div class="progress-stage" id="progress-stage">Conectando con GBM…</div>
-    <div class="progress-hint">
-      Esto puede tardar un par de minutos. Por favor, no cierres la pestaña.
-    </div>
-  </div>
-</div>
+<!-- TOTP modal, config modal, and progress overlay are injected by _shared.js. -->
 
 <script src="/app/_shared.js"></script>
 <script>
@@ -558,10 +380,11 @@ async function load() {
     const safeText = (url) =>
       fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
 
-    const [accounts, positionsByAccount, investmentsGroups, lastUpdate] = await Promise.all([
+    const [accounts, positionsByAccount, investmentsGroups, transactions, lastUpdate] = await Promise.all([
       safeJson("/DATA/accounts.json"),
       safeJson("/DATA/positions.json"),
       safeJson("/DATA/investments_groups.json"),
+      safeJson("/DATA/transactions.json"),
       safeText("/DATA/last_update.date"),
     ]);
 
@@ -585,6 +408,7 @@ async function load() {
     state.accounts = sortAccounts(accounts);
     state.positionsByAccount = positionsByAccount || {};
     state.investmentsGroups = investmentsGroups || null;
+    state.transactions = transactions || null;
     state.lastUpdate = lastUpdate.trim();
 
     // Flatten positions across ALL accounts. Each position carries the
@@ -662,6 +486,109 @@ function accountValue(account) {
   return account.position?.amount || 0;
 }
 
+// ----------------------------------------------------------------------
+// XIRR — annualized money-weighted return.
+// Ported from Trade-Republic-Dashboard/app/analyze_analytics.py
+// (Newton-Raphson with several starting guesses + bisection fallback).
+//
+// IMPORTANT GBM-specific limitation:
+//   GBM's transaction API only returns the last 365 days (configurable
+//   via GBM_TRANSACTIONS_DAYS). The lifetime XIRR can't be computed
+//   without the full history of deposits/withdrawals. What we DO compute
+//   is the XIRR of the cashflows in our window + today's full portfolio
+//   value as terminal. If the bulk of capital was deposited before this
+//   window, the result will be biased (overstated, usually). The UI
+//   labels it accordingly.
+// ----------------------------------------------------------------------
+function _xirrNpv(rate, days, amounts) {
+  let s = 0;
+  for (let i = 0; i < amounts.length; i++) {
+    s += amounts[i] / Math.pow(1 + rate, days[i] / 365.0);
+  }
+  return s;
+}
+
+function xirr(cashFlows, tol = 1e-7) {
+  if (!cashFlows || cashFlows.length < 2) return null;
+  // cashFlows: [{ date: Date, amount: number }, ...]
+  // amount < 0 = outflow (capital committed by the investor)
+  // amount > 0 = inflow  (capital returned to the investor + terminal)
+  const sorted = [...cashFlows].sort((a, b) => a.date - b.date);
+  const t0 = sorted[0].date;
+  const days = sorted.map(cf => Math.floor((cf.date - t0) / (1000 * 60 * 60 * 24)));
+  const amounts = sorted.map(cf => Number(cf.amount));
+  if (amounts.every(a => a >= 0) || amounts.every(a => a <= 0)) return null;
+
+  // Newton-Raphson from multiple starting guesses.
+  for (const guess of [0.10, 0.0, -0.10, 0.30, -0.30, 0.50]) {
+    let rate = guess;
+    let ok = true;
+    for (let it = 0; it < 80; it++) {
+      const npv = _xirrNpv(rate, days, amounts);
+      let dnpv = 0;
+      for (let i = 0; i < amounts.length; i++) {
+        const d = days[i];
+        dnpv += (-d / 365.0) * amounts[i] / Math.pow(1 + rate, d / 365.0 + 1);
+      }
+      if (!isFinite(npv) || !isFinite(dnpv) || Math.abs(dnpv) < 1e-12) {
+        ok = false; break;
+      }
+      let newRate = rate - npv / dnpv;
+      if (newRate <= -0.999) newRate = -0.99;
+      if (Math.abs(newRate - rate) < tol) return newRate;
+      rate = newRate;
+    }
+    if (ok) continue;  // Newton diverged for this guess — try next
+  }
+
+  // Bisection fallback in [-0.95, 10.0].
+  let lo = -0.95, hi = 10.0;
+  let fLo = _xirrNpv(lo, days, amounts);
+  let fHi = _xirrNpv(hi, days, amounts);
+  if (!isFinite(fLo) || !isFinite(fHi) || fLo * fHi > 0) return null;
+  for (let it = 0; it < 120; it++) {
+    const mid = (lo + hi) / 2;
+    const fMid = _xirrNpv(mid, days, amounts);
+    if (!isFinite(fMid)) return null;
+    if (Math.abs(fMid) < tol || Math.abs(hi - lo) < tol) return mid;
+    if (fLo * fMid < 0) { hi = mid; fHi = fMid; }
+    else                { lo = mid; fLo = fMid; }
+  }
+  return (lo + hi) / 2;
+}
+
+// Build the cash-flow list from transactions.json + current portfolio value.
+function buildXirrCashflows() {
+  if (!state.transactions || !state.transactions.transactions) return null;
+  const txs = state.transactions.transactions;
+
+  // ONLY external_deposit / external_withdrawal count as user-side flows.
+  // Internal "deposit"/"withdrawal" are between sub-accounts within GBM
+  // (description: "TRASPASO"). Dividends, fx, buys, sells, repos are
+  // internal to the broker's investment performance.
+  const flows = [];
+  for (const t of txs) {
+    const cat = t.category;
+    if (cat !== "external_deposit" && cat !== "external_withdrawal") continue;
+    const d = new Date(t.process_date);
+    if (isNaN(d.getTime())) continue;
+    const amt = Math.abs(Number(t.amount) || 0);
+    if (amt === 0) continue;
+    // From the investor's perspective: depositing = capital committed = negative.
+    const signed = cat === "external_deposit" ? -amt : +amt;
+    flows.push({ date: d, amount: signed });
+  }
+  if (flows.length === 0) return null;
+
+  // Terminal: today's portfolio value, as positive (what you'd receive
+  // if you liquidated everything right now).
+  const { totalValue } = aggregates();
+  if (totalValue <= 0) return null;
+  flows.push({ date: new Date(), amount: totalValue });
+
+  return flows;
+}
+
 function aggregates() {
   // Total value:
   // 1) Prefer the v3 dashboard "investments-groups" endpoint when
@@ -718,10 +645,79 @@ function accountPnL(account) {
 function renderAll() {
   renderHeader();
   renderCards();
+  renderConcentrationWarning();
   renderAccounts();
   populateAccountFilter();
   renderTopMovers();
   renderTable();
+}
+
+// The allocation ring chart moved to /app/analysis.html on 2026-06-02.
+
+// ----------------------------------------------------------------------
+// Concentration check
+// ----------------------------------------------------------------------
+// Heuristic: if one ticker > 50% of portfolio, or top-5 tickers > 70%,
+// surface a banner so the user notices the lopsided allocation. Aggregates
+// across accounts — a ticker held in Personal + Asesor counts as ONE
+// position (otherwise an asset shown twice could trick the heuristic).
+// Pure-cash positions (efectivo) are excluded — concentration of cash is
+// not "single-stock risk".
+function computeConcentration() {
+  const flat = state.positionsFlat.filter(
+    p => p._market_key !== "efectivo" && p.issue_id !== "Subtotal"
+  );
+  if (flat.length === 0) return null;
+
+  // Aggregate market_value by issue_id across accounts.
+  const byIssue = {};
+  for (const p of flat) {
+    const v = Number(p.market_value) || 0;
+    if (v <= 0) continue;
+    byIssue[p.issue_id] = (byIssue[p.issue_id] || 0) + v;
+  }
+  const entries = Object.entries(byIssue).sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  if (total <= 0 || entries.length === 0) return null;
+
+  const [topTicker, topValue] = entries[0];
+  const topShare = topValue / total;
+  const top5 = entries.slice(0, 5);
+  const top5Share = top5.reduce((s, [, v]) => s + v, 0) / total;
+
+  // Severity: severe (red) if either threshold exceeded by a lot;
+  // caution (amber) for moderate concentration; none below.
+  let level = "none";
+  if (topShare > 0.50 || top5Share > 0.85) level = "severe";
+  else if (topShare > 0.30 || top5Share > 0.70) level = "caution";
+
+  return { level, topTicker, topShare, top5Share, top5 };
+}
+
+function renderConcentrationWarning() {
+  const c = computeConcentration();
+  const box = document.getElementById("concentration-warning");
+  if (!c || c.level === "none") {
+    box.innerHTML = "";
+    return;
+  }
+  const pct = (n) => (n * 100).toFixed(1) + "%";
+  const cls = c.level === "severe" ? "warning severe" : "warning";
+  const tickerLabel = c.topTicker;
+  let headline;
+  if (c.topShare > 0.30) {
+    headline = `<b>Concentración alta:</b> ${tickerLabel} es ${pct(c.topShare)} del portafolio`;
+    if (c.top5Share > 0.70) {
+      headline += `. Top 5 emisoras = ${pct(c.top5Share)}`;
+    }
+    headline += ".";
+  } else {
+    headline = `<b>Top 5 emisoras concentran ${pct(c.top5Share)}</b> del portafolio.`;
+  }
+  const detail = c.level === "severe"
+    ? "Riesgo de exposición single-name elevado. Considera diversificar."
+    : "Considera revisar si la concentración es intencional.";
+  box.innerHTML = `<div class="${cls}">${headline}<div class="detail">${detail}</div></div>`;
 }
 
 function populateAccountFilter() {
@@ -777,6 +773,43 @@ function renderCards() {
 
   document.getElementById("num-positions").textContent = numPositions;
   document.getElementById("num-accounts").textContent = state.accounts.length;
+
+  // XIRR — annualized money-weighted return based on the cashflow window
+  // we can see (last GBM_TRANSACTIONS_DAYS). The limitation: GBM only
+  // serves transactions from its API for that window; capital deposited
+  // BEFORE that window is invisible. If the implied annual return ends
+  // up impossibly high it usually means we're seeing recent flows
+  // against a portfolio that was funded years ago — XIRR can't reconcile.
+  const xirrEl = document.getElementById("xirr-value");
+  const xirrDetailEl = document.getElementById("xirr-detail");
+  const flows = buildXirrCashflows();
+  if (!flows) {
+    xirrEl.textContent = "—";
+    xirrEl.className = "value";
+    xirrDetailEl.textContent = "sin flujos externos en la ventana de datos";
+    return;
+  }
+  const externalCount = flows.length - 1;  // -1 for the terminal
+  const spanDays = Math.floor(
+    (flows[flows.length - 1].date - flows[0].date) / (1000 * 60 * 60 * 24)
+  );
+  const r = xirr(flows);
+  if (r == null || !isFinite(r)) {
+    xirrEl.textContent = "—";
+    xirrEl.className = "value";
+    xirrDetailEl.textContent =
+      externalCount === 0
+        ? "sin flujos externos en la ventana"
+        : `${externalCount} flujo${externalCount === 1 ? "" : "s"} externo${externalCount === 1 ? "" : "s"} en ${spanDays}d — historial insuficiente`;
+    xirrDetailEl.title =
+      "GBM solo expone los últimos 365 días de transacciones. Si la mayor parte de tu capital se depositó antes, XIRR no puede reconciliar la ventana corta con el valor actual. Mejorará cuando haya 12+ meses de historial visible.";
+    return;
+  }
+  const pct = (r * 100).toFixed(2) + "%";
+  xirrEl.textContent = (r >= 0 ? "+" : "") + pct;
+  xirrEl.className = "value " + pnlClass(r);
+  xirrDetailEl.textContent =
+    `${externalCount} flujo${externalCount === 1 ? "" : "s"} externo${externalCount === 1 ? "" : "s"} en ${spanDays}d`;
 }
 
 function renderAccounts() {
@@ -996,297 +1029,21 @@ function renderTable() {
   }).join("");
 }
 
-// ----------------------------------------------------------------------
-// Update + TOTP modal
-// ----------------------------------------------------------------------
-async function triggerUpdate(totpCode = null) {
-  const btn = document.getElementById("update-btn");
-  btn.disabled = true;
-  btn.textContent = totpCode ? "⟳ Verificando código..." : "⟳ Conectando...";
-
-  // Defer the heavy overlay: the first call (no TOTP) might immediately
-  // come back with mfa_required, in which case we don't want to flash
-  // the overlay before opening the TOTP modal. When a TOTP code IS
-  // present we already know the fetch will run for minutes, so show
-  // the overlay right away.
-  let overlayShown = false;
-  let pollTimer = null;
-  const startOverlay = () => {
-    if (overlayShown) return;
-    overlayShown = true;
-    showProgressOverlay();
-    pollTimer = startProgressPolling();
-    btn.textContent = "⟳ Actualizando...";
-  };
-  const stopOverlay = () => {
-    if (overlayTimer) clearTimeout(overlayTimer);
-    if (pollTimer) {
-      stopProgressPolling(pollTimer);
-      pollTimer = null;
-    }
-    if (overlayShown) {
-      hideProgressOverlay();
-      overlayShown = false;
-    }
-  };
-  // 0 ms delay when the user just typed a TOTP — the fetch WILL be slow.
-  // 700 ms when this is the first probe — quick responses (mfa_required,
-  // bad credentials) get to dismiss before the overlay even appears.
-  const overlayDelay = totpCode != null ? 0 : 700;
-  const overlayTimer = setTimeout(startOverlay, overlayDelay);
-
-  let res;
-  try {
-    res = await fetch("/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(totpCode ? { totp_code: totpCode } : {}),
-    });
-  } catch (err) {
-    stopOverlay();
-    btn.disabled = false;
-    btn.textContent = "⟳ Actualizar";
-    alert("No se pudo conectar al server.\nDetalle: " + err.message);
-    return;
-  }
-
-  clearTimeout(overlayTimer);
-  if (pollTimer) stopProgressPolling(pollTimer);
-
-  let payload = {};
-  try { payload = await res.json(); } catch (_) {}
-
-  if (res.ok && payload.status === "ok") {
-    closeModal();
-    btn.textContent = "⟳ Refrescando vista...";
-    await load();
-    stopOverlay();
-    btn.disabled = false;
-    btn.textContent = "⟳ Actualizar";
-    return;
-  }
-
-  // Handle the documented error statuses from the server.
-  stopOverlay();
-  btn.disabled = false;
-  btn.textContent = "⟳ Actualizar";
-
-  if (payload.status === "mfa_required") {
-    openModal();
-    return;
-  }
-  if (payload.status === "mfa_invalid") {
-    openModal("Código incorrecto o ya expiró. Genera uno nuevo en tu app.");
-    return;
-  }
-  if (payload.status === "auth_failed") {
-    closeModal();
-    openConfigModal();
-    document.getElementById("config-error").textContent =
-      "Las credenciales son incorrectas o GBM las rechazó. Corrige y reintenta.";
-    document.getElementById("config-error").classList.remove("hidden");
-    return;
-  }
-  if (payload.status === "config_error") {
-    closeModal();
-    openConfigModal(true);
-    return;
-  }
-  if (payload.status === "api_error" || payload.status === "timeout") {
-    closeModal();
-    alert("La API de GBM falló: " + (payload.detail || "sin detalle"));
-    return;
-  }
-  closeModal();
-  alert("Update falló (HTTP " + res.status + "): " + (payload.detail || "sin detalle"));
-}
-
-function openModal(errorMsg = null) {
-  const modal = document.getElementById("totp-modal");
-  const errEl = document.getElementById("totp-error");
-  const input = document.getElementById("totp-input");
-  if (errorMsg) {
-    errEl.textContent = errorMsg;
-    errEl.classList.remove("hidden");
-  } else {
-    errEl.classList.add("hidden");
-  }
-  input.value = "";
-  document.getElementById("totp-submit").disabled = true;
-  modal.classList.add("show");
-  setTimeout(() => input.focus(), 100);
-}
-
-function closeModal() {
-  document.getElementById("totp-modal").classList.remove("show");
-}
-
-function closeModalIfBackdrop(e, which) {
-  const id = which === "config" ? "config-modal" : "totp-modal";
-  if (e.target.id === id) {
-    if (which === "config") closeConfigModal();
-    else closeModal();
-  }
-}
-
-// ----------------------------------------------------------------------
-// Config modal (email + password)
-// ----------------------------------------------------------------------
-async function loadConfigStatus() {
-  try {
-    const res = await fetch("/config");
-    const data = await res.json();
-    return data;
-  } catch (_) {
-    return { configured: false, email: null };
-  }
-}
-
-async function maybeShowConfigOnFirstLoad() {
-  const status = await loadConfigStatus();
-  if (!status.configured) {
-    openConfigModal(/* firstTime = */ true);
-  }
-}
-
-function openConfigModal(firstTime = false) {
-  const modal = document.getElementById("config-modal");
-  const errEl = document.getElementById("config-error");
-  errEl.classList.add("hidden");
-  // Pre-fill email if we know it.
-  loadConfigStatus().then(s => {
-    const emailEl = document.getElementById("config-email");
-    const pwEl = document.getElementById("config-password");
-    if (s.email && !firstTime) emailEl.value = s.email;
-    pwEl.value = "";
-    document.getElementById("config-submit").disabled = true;
-    modal.classList.add("show");
-    setTimeout(() => (s.email ? pwEl : emailEl).focus(), 100);
-  });
-}
-
-function closeConfigModal() {
-  document.getElementById("config-modal").classList.remove("show");
-}
-
-function onConfigInput() {
-  const email = document.getElementById("config-email").value.trim();
-  const pw = document.getElementById("config-password").value;
-  const ok = email.includes("@") && pw.length >= 4;
-  document.getElementById("config-submit").disabled = !ok;
-}
-
-async function submitConfig() {
-  const email = document.getElementById("config-email").value.trim();
-  const password = document.getElementById("config-password").value;
-  const btn = document.getElementById("config-submit");
-  const errEl = document.getElementById("config-error");
-  btn.disabled = true;
-  btn.textContent = "Guardando...";
-
-  try {
-    const res = await fetch("/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const payload = await res.json();
-    if (res.ok && payload.status === "ok") {
-      btn.textContent = "Guardar";
-      closeConfigModal();
-      // If the account changed, wipe the in-memory state too so the user
-      // sees a clean slate while the new fetch is happening.
-      if (payload.account_changed) {
-        state.accounts = [];
-        state.positionsByAccount = {};
-        state.positionsFlat = [];
-        renderAll();
-      }
-      // Kick off an update — server will report mfa_required and the
-      // TOTP modal will appear automatically.
-      triggerUpdate();
-      return;
-    }
-    errEl.textContent = payload.detail || "Error guardando credenciales.";
-    errEl.classList.remove("hidden");
-  } catch (err) {
-    errEl.textContent = "No se pudo conectar al servidor.";
-    errEl.classList.remove("hidden");
-  }
-  btn.textContent = "Guardar";
-  onConfigInput();  // reevaluate disabled state
-}
-
-function onTotpInput(e) {
-  // Strip non-digits, cap at 6.
-  const cleaned = e.target.value.replace(/\D/g, "").slice(0, 6);
-  e.target.value = cleaned;
-  document.getElementById("totp-submit").disabled = cleaned.length !== 6;
-}
-
-function submitTotp() {
-  const code = document.getElementById("totp-input").value.trim();
-  if (!(code.length === 6 && /^\d+$/.test(code))) return;
-  document.getElementById("totp-submit").disabled = true;
-  triggerUpdate(code);
-}
-
-// ----------------------------------------------------------------------
-// Progress overlay (shown during /update fetches)
-// Spanish, friendly, no technical noise. The stage message changes
-// based on elapsed time so the user knows things are still happening.
-// ----------------------------------------------------------------------
-const PROGRESS_STAGES = [
-  { until: 3,    text: "Conectando con GBM…" },
-  { until: 12,   text: "Descargando tu portafolio…" },
-  { until: 45,   text: "Descargando posiciones…" },
-  { until: 120,  text: "Descargando historial de operaciones…" },
-  { until: 180,  text: "Ya casi terminamos…" },
-  { until: Infinity, text: "Sigue trabajando, espera un poco más…" },
-];
-
-let _progressStartedAt = null;
-
-function showProgressOverlay() {
-  document.getElementById("progress-overlay").classList.add("show");
-  document.getElementById("progress-stage").textContent = PROGRESS_STAGES[0].text;
-  _progressStartedAt = Date.now();
-}
-
-function hideProgressOverlay() {
-  document.getElementById("progress-overlay").classList.remove("show");
-  _progressStartedAt = null;
-}
-
-function startProgressPolling() {
-  // We don't pull the technical log anymore — we just rotate friendly
-  // Spanish messages based on how long the fetch has been running.
-  const updateStage = () => {
-    if (_progressStartedAt == null) return;
-    const elapsed = (Date.now() - _progressStartedAt) / 1000;
-    const stage = PROGRESS_STAGES.find(s => elapsed < s.until)
-                  || PROGRESS_STAGES[PROGRESS_STAGES.length - 1];
-    const el = document.getElementById("progress-stage");
-    if (el.textContent !== stage.text) el.textContent = stage.text;
-  };
-  updateStage();
-  return setInterval(updateStage, 1000);
-}
-
-function stopProgressPolling(timer) {
-  if (timer != null) clearInterval(timer);
-}
-
-// Close any open modal with Escape.
-document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape") return;
-  closeModal();
-  closeConfigModal();
-});
-
-// On first ever load (no credentials saved yet) the config modal opens
-// automatically so the user can set things up without touching the terminal.
-maybeShowConfigOnFirstLoad();
+// All chrome (update button, TOTP modal, config modal, progress overlay,
+// Escape handler, first-run config prompt) lives in _shared.js. We hook
+// into it via these two well-known names:
+//   window.onUpdateComplete — called after a successful /update so the
+//     page can re-render its data without a full reload.
+//   window.onAccountChanged — called when the config modal saved a new
+//     email (different account) — we wipe in-memory state here so the
+//     view doesn't briefly show the old account's holdings.
+window.onUpdateComplete = load;
+window.onAccountChanged = () => {
+  state.accounts = [];
+  state.positionsByAccount = {};
+  state.positionsFlat = [];
+  renderAll();
+};
 
 load();
 </script>

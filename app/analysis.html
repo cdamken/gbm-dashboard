@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>GBM Análisis</title>
+<!-- Chart.js for the visualization charts. CDN-cached after first load. -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --bg: #0f1419;
+  --card: #1a1f2e;
+  --border: #2a3142;
+  --text: #e8eef5;
+  --muted: #7a8599;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+  --purple: #c084fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5;
+}
+
+.subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+
+.green { color: var(--green); }
+.red { color: var(--red); }
+.amber { color: var(--amber); }
+.muted { color: var(--muted); }
+
+.section {
+  margin: 32px 0 16px; font-size: 18px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+.section:first-of-type { margin-top: 0; }
+.badge {
+  background: var(--border); color: var(--muted); font-size: 12px;
+  padding: 3px 10px; border-radius: 12px; font-weight: 500;
+}
+
+.warning {
+  background: rgba(251, 191, 36, 0.1); border-left: 4px solid var(--amber);
+  padding: 14px 18px; border-radius: 8px; margin: 16px 0; font-size: 13px;
+  color: var(--text);
+}
+.error {
+  background: rgba(248, 113, 113, 0.1); border-left: 4px solid var(--red);
+  padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px;
+}
+
+/* ---------- Chart cards ---------- */
+.chart-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px 24px;
+  margin-bottom: 24px;
+}
+.chart-card .chart-title {
+  font-size: 14px; color: var(--muted); margin-bottom: 12px;
+  text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600;
+}
+.chart-container {
+  position: relative;
+  height: 320px;
+  width: 100%;
+}
+.chart-empty {
+  height: 320px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 14px; text-align: center; padding: 20px;
+}
+
+/* Future-charts placeholder cards have a subtle muted look so users
+   know the section is wired up but waiting on the data pipeline. */
+.chart-card.planned {
+  border-style: dashed; opacity: 0.65;
+}
+.chart-card.planned .chart-empty {
+  color: var(--muted); font-size: 13px;
+}
+
+.disclaimer {
+  margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; line-height: 1.6;
+}
+.disclaimer a { color: var(--blue); text-decoration: none; }
+.disclaimer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body data-tab="analysis">
+
+<!-- Top-bar (brand + tabs + ⟳ Actualizar) is injected by _shared.js. -->
+<div class="subtitle">
+  Visualizaciones del portafolio · Última actualización:
+  <span id="last-update">—</span>
+  <!-- staleness chip is injected by _shared.js -->
+</div>
+
+<div id="error-box"></div>
+
+<!-- ---------- Composición por mercado ---------- -->
+<div class="section">
+  <span>Composición del portafolio</span>
+  <span class="badge muted" id="alloc-badge">por mercado</span>
+</div>
+<div class="chart-card">
+  <div class="chart-container">
+    <canvas id="allocation-chart"></canvas>
+    <div id="allocation-empty" class="chart-empty" style="display:none;">
+      Sin posiciones para graficar todavía.
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Dividendos por mes ---------- -->
+<div class="section">
+  <span>Dividendos por mes</span>
+  <span class="badge muted" id="div-badge">últimos 12 meses</span>
+</div>
+<div class="chart-card">
+  <div class="chart-container">
+    <canvas id="dividends-chart"></canvas>
+    <div id="dividends-empty" class="chart-empty" style="display:none;">
+      Sin dividendos en los últimos 12 meses.
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Patrimonio en el tiempo (cost basis trajectory) ---------- -->
+<div class="section">
+  <span>Capital invertido en el tiempo</span>
+  <span class="badge muted" id="hist-badge">cost basis (compras − ventas)</span>
+</div>
+<div class="chart-card">
+  <div class="chart-container">
+    <canvas id="history-chart"></canvas>
+    <div id="history-empty" class="chart-empty" style="display:none;">
+      Sin transacciones suficientes para graficar.
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Placeholders restantes ---------- -->
+<div class="section">
+  <span>Próximamente</span>
+  <span class="badge muted">en el backlog</span>
+</div>
+
+<div class="chart-card planned">
+  <div class="chart-title">📊 Benchmark replay</div>
+  <div class="chart-empty">
+    NAFTRAC (BMV) y SPY (USA) overlay — "qué hubiera pasado si invertía en el índice".<br>
+    Pendiente — equivalente al MSCI World replay de TR.
+  </div>
+</div>
+
+<div class="disclaimer">
+  Dashboard no oficial · <span style="font-family: monospace;" data-version></span> · datos vía
+  <a href="https://github.com/cdamken/gbm-mx-api" target="_blank">gbm-mx-api</a>.
+  Todo corre en localhost; nada de tus datos sale de tu máquina.
+  No afiliado con Grupo Bursátil Mexicano.
+</div>
+
+<script src="/app/_shared.js"></script>
+<script>
+// ----------------------------------------------------------------------
+// State + loaders. Shared structure with index.html but a smaller surface
+// — Análisis only needs accounts + positions to draw the allocation chart.
+// ----------------------------------------------------------------------
+const INVEST_SECTIONS = [
+  "mercados_globales_sic",
+  "mercado_capitales",
+  "sociedades_inversion_deuda",
+  "sociedades_inversion_comun",
+  "mercado_extranjero",
+];
+
+let state = {
+  accounts: [],
+  positionsByAccount: {},
+  positionsFlat: [],
+  dividends: null,
+  transactions: null,
+  lastUpdate: null,
+};
+
+function flattenPositions(posData, account) {
+  if (!posData) return [];
+  const all = [];
+  for (const key of INVEST_SECTIONS) {
+    const section = posData[key] || [];
+    for (const p of section) {
+      if (p.issue_id === "Subtotal") continue;
+      all.push({
+        ...p,
+        _market_key: key,
+        _account_legacy_id: account?.legacy_contract_id || null,
+        _account_name: account?.name || null,
+      });
+    }
+  }
+  return all;
+}
+
+async function load() {
+  try {
+    const opts = { cache: "no-store" };
+    const safeJson = (url) =>
+      fetch(url, opts).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const safeText = (url) =>
+      fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
+
+    const [accounts, positionsByAccount, dividends, transactions, lastUpdate] = await Promise.all([
+      safeJson("/DATA/accounts.json"),
+      safeJson("/DATA/positions.json"),
+      safeJson("/DATA/dividends.json"),
+      safeJson("/DATA/transactions.json"),
+      safeText("/DATA/last_update.date"),
+    ]);
+
+    state.dividends = dividends;
+    state.transactions = transactions;
+    state.lastUpdate = (lastUpdate || "").trim();
+
+    if (!accounts) {
+      document.getElementById("error-box").innerHTML =
+        `<div class="warning">
+          <b>Aún no hay datos descargados.</b>
+          Dale <b>⟳ Actualizar</b> arriba para autenticar con GBM y bajar tu portafolio.
+        </div>`;
+      document.getElementById("allocation-empty").style.display = "flex";
+      return;
+    }
+
+    state.accounts = accounts;
+    state.positionsByAccount = positionsByAccount || {};
+    state.positionsFlat = [];
+    for (const a of accounts) {
+      const flat = flattenPositions(positionsByAccount[a.legacy_contract_id], a);
+      state.positionsFlat.push(...flat);
+    }
+
+    renderHeader();
+    renderAllocationChart();
+    renderDividendsChart();
+    renderNetWorthChart();
+  } catch (err) {
+    document.getElementById("error-box").innerHTML =
+      `<div class="error"><b>No se pudieron cargar los datos.</b><br>
+       Detalle: ${err.message}</div>`;
+  }
+}
+
+function renderHeader() {
+  document.getElementById("last-update").textContent = formatTimestamp(state.lastUpdate);
+  const stale = stalenessHint(state.lastUpdate);
+  const chip = document.getElementById("last-update-age");
+  if (stale && chip) {
+    chip.textContent = stale.label;
+    chip.className = "staleness-chip show " + stale.severity;
+  }
+}
+
+// ----------------------------------------------------------------------
+// Allocation ring chart — composition by GBM market bucket.
+// (Moved here from index.html — analysis is now the home for charts.)
+// ----------------------------------------------------------------------
+let _allocChart = null;
+function renderAllocationChart() {
+  if (typeof window.Chart !== "function") return;
+  const canvas = document.getElementById("allocation-chart");
+  const emptyEl = document.getElementById("allocation-empty");
+  if (!canvas) return;
+
+  // Aggregate market_value by market_key across every position.
+  const buckets = {};
+  for (const p of state.positionsFlat) {
+    if (p.issue_id === "Subtotal") continue;
+    const v = Number(p.market_value) || 0;
+    if (v <= 0) continue;
+    const k = p._market_key || "otro";
+    buckets[k] = (buckets[k] || 0) + v;
+  }
+
+  const ORDER = [
+    { key: "mercado_capitales",           label: "BMV",         color: "#60a5fa" },
+    { key: "mercados_globales_sic",       label: "SIC",         color: "#c084fc" },
+    { key: "mercado_extranjero",          label: "Extranjero",  color: "#4ade80" },
+    { key: "sociedades_inversion_comun",  label: "F. Común",    color: "#fbbf24" },
+    { key: "sociedades_inversion_deuda",  label: "F. Deuda",    color: "#f59e0b" },
+    { key: "efectivo",                    label: "Efectivo",    color: "#7a8599" },
+  ];
+  const labels = [];
+  const data = [];
+  const colors = [];
+  for (const slot of ORDER) {
+    const v = buckets[slot.key];
+    if (!v) continue;
+    labels.push(slot.label);
+    data.push(v);
+    colors.push(slot.color);
+  }
+  for (const k of Object.keys(buckets)) {
+    if (ORDER.some(s => s.key === k)) continue;
+    labels.push(k);
+    data.push(buckets[k]);
+    colors.push("#6b7280");
+  }
+
+  if (data.length === 0) {
+    if (_allocChart) { _allocChart.destroy(); _allocChart = null; }
+    canvas.style.display = "none";
+    emptyEl.style.display = "flex";
+    return;
+  }
+  canvas.style.display = "";
+  emptyEl.style.display = "none";
+
+  // Update the badge with the total + number of buckets, so the user has
+  // a quick numeric reference next to the chart.
+  const total = data.reduce((s, v) => s + v, 0);
+  document.getElementById("alloc-badge").textContent =
+    `${data.length} mercados · ${fmtMoney(total, { currency: true, decimals: 0 })}`;
+
+  if (_allocChart) _allocChart.destroy();
+  _allocChart = new window.Chart(canvas, {
+    type: "doughnut",
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors,
+        borderColor: "#1a1f2e",
+        borderWidth: 3,
+        hoverOffset: 12,
+        hoverBorderWidth: 3,
+        spacing: 2,
+      }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      cutout: "68%",
+      animation: { duration: 600, easing: "easeOutQuart", animateRotate: true },
+      plugins: {
+        legend: {
+          position: "right",
+          labels: {
+            color: "#e8eef5",
+            font: { size: 13, weight: "600" },
+            padding: 16,
+            usePointStyle: true,
+            pointStyle: "circle",
+            boxWidth: 12,
+            boxHeight: 12,
+          },
+        },
+        tooltip: {
+          backgroundColor: "#0f1419",
+          titleColor: "#e8eef5",
+          bodyColor: "#e8eef5",
+          borderColor: "#2a3142",
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            label: (ctx) => {
+              const t = ctx.dataset.data.reduce((s, v) => s + v, 0);
+              const pct = t > 0 ? (ctx.parsed / t * 100) : 0;
+              return ` ${ctx.label}: ${fmtMoney(ctx.parsed, { currency: true, decimals: 0 })}  (${pct.toFixed(1)}%)`;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+// ----------------------------------------------------------------------
+// Monthly dividends bar chart — net payout (kept) vs ISR (withheld).
+// Stacked so the total bar height = gross dividend; the red portion on
+// top makes the tax cost visible without hiding the net.
+// ----------------------------------------------------------------------
+let _divChart = null;
+function renderDividendsChart() {
+  if (typeof window.Chart !== "function") return;
+  const canvas = document.getElementById("dividends-chart");
+  const emptyEl = document.getElementById("dividends-empty");
+  if (!canvas) return;
+
+  const rows = state.dividends?.dividends || [];
+  if (rows.length === 0) {
+    if (_divChart) { _divChart.destroy(); _divChart = null; }
+    canvas.style.display = "none";
+    emptyEl.style.display = "flex";
+    return;
+  }
+
+  // Build the last 12 months bucket (including empty months) so the chart
+  // shows a full year context even when only a few months have data.
+  const now = new Date();
+  const months = [];   // [{key: "YYYY-MM", label: "..."}, ...]
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    months.push({ key, label: monthLabel(key) });
+  }
+  const payoutByMonth = {};
+  const taxByMonth = {};
+  const countByMonth = {};
+  for (const row of rows) {
+    const k = (row.process_date || "").slice(0, 7);
+    if (!k) continue;
+    const amt = Number(row.amount) || 0;
+    if (row.is_withholding) {
+      taxByMonth[k] = (taxByMonth[k] || 0) + amt;
+    } else {
+      payoutByMonth[k] = (payoutByMonth[k] || 0) + amt;
+    }
+    countByMonth[k] = (countByMonth[k] || 0) + 1;
+  }
+
+  const labels = months.map(m => m.label);
+  const payouts = months.map(m => payoutByMonth[m.key] || 0);
+  const taxes   = months.map(m => taxByMonth[m.key] || 0);
+
+  const totalNet = payouts.reduce((s, v) => s + v, 0);
+  const totalTax = taxes.reduce((s, v) => s + v, 0);
+  document.getElementById("div-badge").textContent =
+    `${fmtMoney(totalNet, { currency: true, decimals: 0 })} neto · ${fmtMoney(totalTax, { currency: true, decimals: 0 })} ISR · últimos 12 meses`;
+
+  canvas.style.display = "";
+  emptyEl.style.display = "none";
+
+  if (_divChart) _divChart.destroy();
+  _divChart = new window.Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Neto recibido",
+          data: payouts,
+          backgroundColor: "rgba(74, 222, 128, 0.75)",
+          borderColor: "#4ade80",
+          borderWidth: 1,
+          stack: "div",
+        },
+        {
+          label: "ISR retenido",
+          data: taxes,
+          backgroundColor: "rgba(248, 113, 113, 0.75)",
+          borderColor: "#f87171",
+          borderWidth: 1,
+          stack: "div",
+        },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      animation: { duration: 600, easing: "easeOutQuart" },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { color: "#7a8599", font: { size: 11 } },
+          grid: { display: false },
+        },
+        y: {
+          stacked: true,
+          ticks: {
+            color: "#7a8599",
+            callback: (v) => fmtMoney(v, { currency: true, decimals: 0 }),
+            font: { size: 11 },
+          },
+          grid: { color: "rgba(42, 49, 66, 0.5)" },
+        },
+      },
+      plugins: {
+        legend: {
+          position: "top",
+          align: "end",
+          labels: {
+            color: "#e8eef5",
+            font: { size: 12, weight: "600" },
+            usePointStyle: true,
+            pointStyle: "rect",
+            boxWidth: 10,
+            boxHeight: 10,
+            padding: 12,
+          },
+        },
+        tooltip: {
+          backgroundColor: "#0f1419",
+          titleColor: "#e8eef5",
+          bodyColor: "#e8eef5",
+          borderColor: "#2a3142",
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed.y;
+              return ` ${ctx.dataset.label}: ${fmtMoney(v, { currency: true, decimals: 2 })}`;
+            },
+            footer: (items) => {
+              if (!items.length) return "";
+              const k = months[items[0].dataIndex].key;
+              const count = countByMonth[k];
+              return count ? `\n${count} movimiento${count === 1 ? "" : "s"}` : "";
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+// ----------------------------------------------------------------------
+// Net worth (cost-basis) trajectory line chart.
+// Reconstructs daily "capital committed" from the transactions: each
+// buy adds to the running total, each sell subtracts. NOT actual market
+// value over time (we don't have historical prices) — this is the
+// cost-basis of all positions you've ever held, useful to see when
+// capital was deployed. Same metric as TR's net_worth_history.
+//
+// GBM caveat: same as XIRR — the API only exposes the last
+// GBM_TRANSACTIONS_DAYS. The line starts at "the snapshot of running
+// total at the beginning of that window" which we don't actually know.
+// We render it starting from 0, which means the line shows DELTAS in
+// cost basis during the window, not the absolute cost basis. The
+// chart badge calls this out.
+// ----------------------------------------------------------------------
+let _histChart = null;
+function renderNetWorthChart() {
+  if (typeof window.Chart !== "function") return;
+  const canvas = document.getElementById("history-chart");
+  const emptyEl = document.getElementById("history-empty");
+  if (!canvas) return;
+
+  const rows = state.transactions?.transactions || [];
+  if (rows.length === 0) {
+    if (_histChart) { _histChart.destroy(); _histChart = null; }
+    canvas.style.display = "none";
+    emptyEl.style.display = "flex";
+    return;
+  }
+
+  // Sort by process_date ascending and accumulate.
+  const sorted = [...rows].sort(
+    (a, b) => (a.process_date || "").localeCompare(b.process_date || "")
+  );
+  let running = 0;
+  // Daily snapshot — last value wins per date.
+  const dailyMap = new Map();
+  for (const t of sorted) {
+    const date = (t.process_date || "").slice(0, 10);
+    if (!date) continue;
+    const amt = Math.abs(Number(t.amount) || 0);
+    // Use is_buy/is_sell flags so we cover every buy/sell category
+    // (stocks, funds, repos) uniformly. Dividends, withholdings, fx,
+    // deposits and withdrawals don't change the cost basis.
+    if (t.is_buy)       running += amt;
+    else if (t.is_sell) running -= amt;
+    else continue;
+    dailyMap.set(date, Math.round(running * 100) / 100);
+  }
+
+  if (dailyMap.size === 0) {
+    if (_histChart) { _histChart.destroy(); _histChart = null; }
+    canvas.style.display = "none";
+    emptyEl.style.display = "flex";
+    return;
+  }
+
+  // Ensure today is the last point so the line extends to "now".
+  const today = new Date().toISOString().slice(0, 10);
+  const datesSorted = [...dailyMap.keys()].sort();
+  const lastDate = datesSorted[datesSorted.length - 1];
+  if (lastDate !== today) {
+    dailyMap.set(today, dailyMap.get(lastDate));
+    datesSorted.push(today);
+  }
+
+  const labels = datesSorted.map(d => d);
+  const values = datesSorted.map(d => dailyMap.get(d));
+
+  // Update badge with window summary.
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const fromDate = state.transactions?.from_date || datesSorted[0];
+  const toDate = state.transactions?.to_date || today;
+  document.getElementById("hist-badge").textContent =
+    `${fromDate} → ${toDate} · rango ${fmtMoney(minV, { currency: true, decimals: 0 })} a ${fmtMoney(maxV, { currency: true, decimals: 0 })}`;
+
+  canvas.style.display = "";
+  emptyEl.style.display = "none";
+
+  if (_histChart) _histChart.destroy();
+  _histChart = new window.Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "Capital invertido (cost basis)",
+        data: values,
+        borderColor: "#60a5fa",
+        backgroundColor: "rgba(96, 165, 250, 0.10)",
+        borderWidth: 2,
+        fill: true,
+        tension: 0.15,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: "#60a5fa",
+        pointHoverBorderColor: "#0f1419",
+        pointHoverBorderWidth: 2,
+      }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      animation: { duration: 600, easing: "easeOutQuart" },
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          ticks: {
+            color: "#7a8599",
+            font: { size: 11 },
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 8,
+            callback: function(value, index) {
+              const label = this.getLabelForValue(value);
+              // Show "MMM YYYY" — easier scan than full ISO date.
+              const d = new Date(label);
+              if (isNaN(d)) return label;
+              return d.toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+            },
+          },
+          grid: { display: false },
+        },
+        y: {
+          ticks: {
+            color: "#7a8599",
+            callback: (v) => fmtMoney(v, { currency: true, decimals: 0 }),
+            font: { size: 11 },
+          },
+          grid: { color: "rgba(42, 49, 66, 0.5)" },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#0f1419",
+          titleColor: "#e8eef5",
+          bodyColor: "#e8eef5",
+          borderColor: "#2a3142",
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            title: (items) => {
+              if (!items.length) return "";
+              const d = new Date(items[0].label);
+              return isNaN(d)
+                ? items[0].label
+                : d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric" });
+            },
+            label: (ctx) => ` ${fmtMoney(ctx.parsed.y, { currency: true, decimals: 2 })}`,
+          },
+        },
+      },
+    },
+  });
+}
+
+window.onUpdateComplete = load;
+
+load();
+</script>
+</body>
+</html>

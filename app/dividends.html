@@ -137,20 +137,11 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </head>
 <body>
 
-<h1>
-  <div class="logo-box">GBM</div>
-  Dividendos
-</h1>
+<!-- Top-bar (brand + tabs + ⟳ Actualizar) is injected by _shared.js. -->
 <div class="subtitle">
   <span id="range-label">Rango: cargando...</span> ·
   Última actualización: <span id="last-update">—</span>
-</div>
-
-<div class="nav">
-  <a href="/app/index.html">📊 Portafolio</a>
-  <a href="/app/orders.html">📋 Órdenes</a>
-  <a href="/app/dividends.html" class="active">💰 Dividendos</a>
-  <a href="/app/transactions.html">📒 Libro Diario</a>
+  <!-- staleness chip is injected by _shared.js -->
 </div>
 
 <div id="error-box"></div>
@@ -266,8 +257,7 @@ async function load() {
       document.getElementById("error-box").innerHTML =
         `<div class="warning">
           <b>Aún no hay datos de dividendos.</b>
-          Ve a <a href="/app/index.html" style="color: var(--blue);">📊 Portafolio</a>
-          y dale <b>⟳ Actualizar</b> para descargar tus movimientos del último año.
+          Dale <b>⟳ Actualizar</b> arriba para descargar tus movimientos del último año.
         </div>`;
       return;
     }
@@ -395,6 +385,10 @@ function renderTable() {
     </tr>`;
   }).join("") || `<tr><td colspan="8" class="empty">Sin movimientos que coincidan con los filtros</td></tr>`;
 }
+
+// Hook for the shared update flow in _shared.js: re-render in place
+// after a successful /update instead of doing a full page reload.
+window.onUpdateComplete = load;
 
 load();
 </script>
