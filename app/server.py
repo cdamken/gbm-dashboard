@@ -224,6 +224,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 payload["gbm_mx_api_version"] = "unknown"
             self._json(200, payload)
             return
+        if self.path == "/export/transactions.csv":
+            self._handle_export_transactions_csv()
+            return
         if self.path == "/progress":
             text = ""
             if PROGRESS_FILE.exists():
@@ -316,6 +319,96 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "signout_detail": signout_detail,
             },
         )
+
+    def _handle_export_transactions_csv(self):
+        """Build a SAT-friendly CSV from the fetched transactions.
+
+        Columns (Spanish, comma-delimited, RFC 4180 quoting):
+          fecha (YYYY-MM-DD), hora, tipo, descripcion, ticker,
+          cuenta, monto, monto_neto, comision, iva, isr_retenido,
+          categoria, transaccion_id.
+
+        Sourced from DATA/transactions.json which fetch_data.py already
+        writes — no extra API calls needed. If the file isn't there yet
+        (first run), return 404 with a helpful message.
+        """
+        import csv
+        import io
+
+        tx_file = DATA_DIR / "transactions.json"
+        if not tx_file.exists():
+            self._json(
+                404,
+                {
+                    "status": "no_data",
+                    "detail": "Aún no hay transactions.json — dale ⟳ Actualizar primero.",
+                },
+            )
+            return
+        try:
+            tx_data = json.loads(tx_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            self._json(500, {"status": "error", "detail": str(e)})
+            return
+
+        rows = tx_data.get("transactions") or []
+        buf = io.StringIO()
+        writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(
+            [
+                "fecha",
+                "hora",
+                "tipo",
+                "categoria",
+                "descripcion",
+                "ticker",
+                "cuenta",
+                "monto",
+                "monto_neto",
+                "comision",
+                "iva",
+                "isr_retenido_o_tax",
+                "transaccion_id",
+            ]
+        )
+        for t in rows:
+            process_date = str(t.get("process_date") or "")
+            fecha = process_date[:10]
+            hora = process_date[11:19]
+            is_buy = t.get("is_buy")
+            is_sell = t.get("is_sell")
+            tipo = (
+                "Compra" if is_buy
+                else "Venta" if is_sell
+                else (t.get("transaction_type") or "Otro")
+            )
+            writer.writerow(
+                [
+                    fecha,
+                    hora,
+                    tipo,
+                    t.get("category") or "",
+                    t.get("description") or "",
+                    t.get("security_id") or "",
+                    t.get("account_name") or t.get("account_legacy_id") or "",
+                    f"{float(t.get('amount') or 0):.4f}",
+                    f"{float(t.get('net_amount') or 0):.4f}",
+                    f"{float(t.get('commission') or 0):.4f}",
+                    f"{float(t.get('iva') or 0):.4f}",
+                    f"{float(t.get('tax') or 0):.4f}",
+                    str(t.get("transaction_id") or ""),
+                ]
+            )
+
+        body = buf.getvalue().encode("utf-8")
+        today = tx_data.get("to_date") or ""
+        filename = f"gbm-transactions-{today}.csv" if today else "gbm-transactions.csv"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _handle_settings(self):
         """Persist the configurable days-back values to .env."""

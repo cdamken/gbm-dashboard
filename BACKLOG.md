@@ -110,10 +110,13 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
 
 ## 3. Datos / export
 
-- [ ] **Export CSV para SAT** — endpoint `GET /export/transactions.csv`
-  con formato compatible (fecha, tipo, monto, ISR retenido, descripción).
-  Útil para pasarle data al contador. Si va más ambicioso, OFX o
-  XML estándar SAT.
+- [x] **Export CSV para SAT** — implementado 2026-06-02. Endpoint
+  `GET /export/transactions.csv` retorna CSV con 13 columnas en español
+  (fecha/hora/tipo/categoria/descripcion/ticker/cuenta/monto/monto_neto/
+  comision/iva/isr_retenido_o_tax/transaccion_id). Botón "📥 Exportar
+  CSV para SAT" en Settings → Rangos de datos. Sourced de
+  `transactions.json` (sin API extra). Para algo más fancy (OFX, XML
+  SAT) queda como ampliación.
 
 - [ ] **Incremental sync** — hoy cada ⟳ Actualizar baja todo. TR hace
   delta sync (~2-15s vs minutos). Trabajo mayor pero impacto alto si

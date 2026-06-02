@@ -107,6 +107,12 @@ body {
   background: transparent; color: var(--red); border: 1px solid var(--red);
 }
 .settings-actions button.danger:hover { background: rgba(248, 113, 113, 0.10); }
+.settings-actions-link {
+  background: transparent; color: var(--muted); border: 1px solid var(--border);
+  padding: 9px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  text-decoration: none; cursor: pointer;
+}
+.settings-actions-link:hover { color: var(--text); border-color: var(--muted); }
 
 .flash {
   margin-top: 12px; padding: 10px 14px; border-radius: 8px;
@@ -223,6 +229,13 @@ body {
       <div class="flash" id="data-flash"></div>
       <div class="settings-actions">
         <button class="primary" id="save-data-btn" type="button">Guardar rangos</button>
+        <a class="settings-actions-link"
+           id="export-csv-link"
+           href="/export/transactions.csv"
+           download
+           title="Descarga un CSV en español listo para pasar al contador o importar a Excel.">
+          📥 Exportar CSV para SAT
+        </a>
       </div>
     </section>
 
