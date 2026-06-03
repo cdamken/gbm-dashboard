@@ -373,9 +373,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         start_date = end_date - timedelta(days=365 * 5)
         p1 = int(start_date.timestamp())
         p2 = int(end_date.timestamp())
+        # interval=1d so the benchmark replay line moves day-by-day,
+        # not in monthly stair-steps. Yahoo's daily endpoint returns
+        # ~252 closes/year (trading days) — much smoother chart.
         url = (
             f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-            f"?period1={p1}&period2={p2}&interval=1mo&events=history"
+            f"?period1={p1}&period2={p2}&interval=1d&events=history"
         )
 
         try:
