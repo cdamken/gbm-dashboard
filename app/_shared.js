@@ -532,6 +532,10 @@ async function triggerUpdate(totpCode = null, opts = {}) {
   const startOverlay = () => {
     if (overlayShown) return;
     overlayShown = true;
+    // If we got here from the TOTP modal (user just typed a code),
+    // close that modal as the progress overlay takes over — otherwise
+    // both stack on top of each other and look broken.
+    if (totpCode) closeModal();
     showProgressOverlay();
     pollTimer = startProgressPolling();
     btn.textContent = "⟳ Actualizando...";
