@@ -166,6 +166,86 @@ def write_json(path: Path, data) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Incremental fetch helpers
+# ---------------------------------------------------------------------------
+# Buffer in days for the incremental window: we re-fetch this many days
+# BEFORE the last_update timestamp so late settlements (T+2 trades,
+# dividends that the server posts a few days after the ex-date, etc.)
+# get picked up and merged. The merge dedupes by unique id, so the
+# overlap is harmless.
+INCREMENTAL_BUFFER_DAYS = 14
+
+
+def read_last_update_date(data_dir: Path) -> date | None:
+    """Return the date portion of DATA/last_update.date, or None.
+
+    None triggers full-window fetch in main(). The file is written at
+    the end of every successful run, so its absence means either first
+    run or a wipe via /reset.
+    """
+    path = data_dir / "last_update.date"
+    if not path.exists():
+        return None
+    try:
+        first_line = path.read_text(encoding="utf-8").strip().splitlines()[0]
+        return date.fromisoformat(first_line.split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def merge_records(
+    existing_path: Path,
+    new_payload: dict,
+    list_field: str,
+    key_fn,
+    sort_key: str,
+    sort_reverse: bool = True,
+) -> dict:
+    """Merge ``new_payload[list_field]`` into the existing JSON at path.
+
+    On key collision, the NEW record wins (so server-side corrections
+    propagate — e.g. a pending order flipping to filled). Existing records
+    not present in the new fetch are kept intact (they're older than the
+    incremental cutoff). Also preserves the older ``from_date`` so the
+    JSON's metadata reflects the full window covered, not just this
+    incremental slice.
+
+    Mutates new_payload[list_field] in place and returns new_payload.
+    """
+    existing_records: list = []
+    existing_from: str | None = None
+    if existing_path.exists():
+        try:
+            with existing_path.open(encoding="utf-8") as f:
+                existing = json.load(f)
+            existing_records = existing.get(list_field, []) or []
+            existing_from = existing.get("from_date")
+        except (json.JSONDecodeError, OSError):
+            pass  # treat as fresh fetch
+
+    by_key: dict = {}
+    # Existing first so new records take precedence on collision.
+    for r in existing_records:
+        try:
+            by_key[key_fn(r)] = r
+        except (KeyError, TypeError):
+            continue
+    for r in new_payload.get(list_field, []) or []:
+        try:
+            by_key[key_fn(r)] = r
+        except (KeyError, TypeError):
+            continue
+    merged = list(by_key.values())
+    merged.sort(key=lambda r: r.get(sort_key, "") or "", reverse=sort_reverse)
+    new_payload[list_field] = merged
+
+    new_from = new_payload.get("from_date")
+    if existing_from and (not new_from or existing_from < new_from):
+        new_payload["from_date"] = existing_from
+    return new_payload
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main() -> None:
@@ -179,7 +259,36 @@ def main() -> None:
         action="store_true",
         help="Don't prompt for anything. Used by the HTTP server.",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help=(
+            "Force a full-window fetch (skip incremental). Use this on first "
+            "run, after /reset, or when you want to re-pull stale data from "
+            "scratch. Without this flag the script reads DATA/last_update.date "
+            "and only fetches transactions since (last_update - "
+            f"{INCREMENTAL_BUFFER_DAYS} days), merging the results into the "
+            "existing JSON files by unique id."
+        ),
+    )
     args = parser.parse_args()
+
+    last_update = read_last_update_date(DATA_DIR)
+    incremental = last_update is not None and not args.full
+    if incremental:
+        # Pull this many days before the last_update timestamp to catch
+        # late settlements; merge will dedupe.
+        incremental_from = last_update - timedelta(days=INCREMENTAL_BUFFER_DAYS)
+        print(
+            f"Incremental mode — fetching since {incremental_from} "
+            f"(last_update = {last_update}, buffer = {INCREMENTAL_BUFFER_DAYS}d)"
+        )
+    else:
+        reason = (
+            "forced via --full" if args.full
+            else "first run / no last_update.date"
+        )
+        print(f"Full mode ({reason}) — pulling the configured days window.")
 
     print("Connecting to GBM+...")
     try:
@@ -285,9 +394,12 @@ def main() -> None:
                 a for a in accounts if a.management_type_template == "trading"
             ]
             if trading_accounts:
-                days_back = int(os.environ.get("GBM_ORDERS_DAYS", "90"))
                 to_date_ = date.today()
-                from_date_ = to_date_ - timedelta(days=days_back)
+                if incremental:
+                    from_date_ = incremental_from
+                else:
+                    days_back = int(os.environ.get("GBM_ORDERS_DAYS", "3650"))
+                    from_date_ = to_date_ - timedelta(days=days_back)
                 print(
                     f"  fetching orders {from_date_} → {to_date_} "
                     f"for {len(trading_accounts)} trading account(s)..."
@@ -356,25 +468,37 @@ def main() -> None:
                     for a in trading_accounts
                 ]
                 # Filled-only (Movimientos page) for backward compat.
-                write_json(
-                    DATA_DIR / "orders.json",
-                    {
-                        "from_date": from_date_.isoformat(),
-                        "to_date": to_date_.isoformat(),
-                        "accounts": accounts_meta,
-                        "orders": filled_orders,
-                    },
-                )
+                filled_payload = {
+                    "from_date": from_date_.isoformat(),
+                    "to_date": to_date_.isoformat(),
+                    "accounts": accounts_meta,
+                    "orders": filled_orders,
+                }
                 # All statuses (Histórico page).
-                write_json(
-                    DATA_DIR / "orders_all.json",
-                    {
-                        "from_date": from_date_.isoformat(),
-                        "to_date": to_date_.isoformat(),
-                        "accounts": accounts_meta,
-                        "orders": all_orders,
-                    },
-                )
+                all_payload = {
+                    "from_date": from_date_.isoformat(),
+                    "to_date": to_date_.isoformat(),
+                    "accounts": accounts_meta,
+                    "orders": all_orders,
+                }
+                if incremental:
+                    # Merge by sob_id (9-digit unique order id). A pending
+                    # order from a previous run can flip to filled in this
+                    # fetch — the new record wins on collision.
+                    filled_payload = merge_records(
+                        DATA_DIR / "orders.json", filled_payload,
+                        list_field="orders",
+                        key_fn=lambda r: r.get("sob_id"),
+                        sort_key="processed_at",
+                    )
+                    all_payload = merge_records(
+                        DATA_DIR / "orders_all.json", all_payload,
+                        list_field="orders",
+                        key_fn=lambda r: r.get("sob_id"),
+                        sort_key="processed_at",
+                    )
+                write_json(DATA_DIR / "orders.json", filled_payload)
+                write_json(DATA_DIR / "orders_all.json", all_payload)
             else:
                 print("  no trading accounts → skipping orders download.")
 
@@ -384,9 +508,12 @@ def main() -> None:
             # users with multiple contracts see them all.
             # ----------------------------------------------------------
             if trading_accounts:
-                div_days_back = int(os.environ.get("GBM_DIVIDENDS_DAYS", "365"))
                 div_to = date.today()
-                div_from = div_to - timedelta(days=div_days_back)
+                if incremental:
+                    div_from = incremental_from
+                else:
+                    div_days_back = int(os.environ.get("GBM_DIVIDENDS_DAYS", "3650"))
+                    div_from = div_to - timedelta(days=div_days_back)
                 print(
                     f"  fetching dividends {div_from} → {div_to} "
                     f"for {len(trading_accounts)} trading account(s)..."
@@ -434,14 +561,19 @@ def main() -> None:
                             }
                         )
                 dividends_payload.sort(key=lambda d: d["process_date"], reverse=True)
-                write_json(
-                    DATA_DIR / "dividends.json",
-                    {
-                        "from_date": div_from.isoformat(),
-                        "to_date": div_to.isoformat(),
-                        "dividends": dividends_payload,
-                    },
-                )
+                div_file_payload = {
+                    "from_date": div_from.isoformat(),
+                    "to_date": div_to.isoformat(),
+                    "dividends": dividends_payload,
+                }
+                if incremental:
+                    div_file_payload = merge_records(
+                        DATA_DIR / "dividends.json", div_file_payload,
+                        list_field="dividends",
+                        key_fn=lambda r: r.get("transaction_id"),
+                        sort_key="process_date",
+                    )
+                write_json(DATA_DIR / "dividends.json", div_file_payload)
 
             # ----------------------------------------------------------
             # Transactions (full ledger). Lives on api.appgbm.com — same
@@ -453,9 +585,12 @@ def main() -> None:
             # account so the dashboard can filter.
             # ----------------------------------------------------------
             if accounts:
-                tx_days_back = int(os.environ.get("GBM_TRANSACTIONS_DAYS", "365"))
                 tx_to = date.today()
-                tx_from = tx_to - timedelta(days=tx_days_back)
+                if incremental:
+                    tx_from = incremental_from
+                else:
+                    tx_days_back = int(os.environ.get("GBM_TRANSACTIONS_DAYS", "3650"))
+                    tx_from = tx_to - timedelta(days=tx_days_back)
                 print(
                     f"  fetching transactions {tx_from} → {tx_to} "
                     f"for {len(accounts)} account(s)..."
@@ -516,15 +651,20 @@ def main() -> None:
                     {"legacy_contract_id": a.legacy_contract_id, "name": a.name}
                     for a in accounts
                 ]
-                write_json(
-                    DATA_DIR / "transactions.json",
-                    {
-                        "from_date": tx_from.isoformat(),
-                        "to_date": tx_to.isoformat(),
-                        "accounts": accounts_meta_all,
-                        "transactions": transactions_payload,
-                    },
-                )
+                tx_file_payload = {
+                    "from_date": tx_from.isoformat(),
+                    "to_date": tx_to.isoformat(),
+                    "accounts": accounts_meta_all,
+                    "transactions": transactions_payload,
+                }
+                if incremental:
+                    tx_file_payload = merge_records(
+                        DATA_DIR / "transactions.json", tx_file_payload,
+                        list_field="transactions",
+                        key_fn=lambda r: r.get("transaction_id"),
+                        sort_key="process_date",
+                    )
+                write_json(DATA_DIR / "transactions.json", tx_file_payload)
 
             (DATA_DIR / "last_update.date").write_text(
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S\n"), encoding="utf-8"

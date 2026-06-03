@@ -588,10 +588,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json(400, {"status": "bad_request", "detail": "totp must be 6 digits"})
                 return
 
+        # Optional --full: bypass incremental and force a full-window
+        # fetch. Used by "Recargar todo desde cero" in the TOTP modal
+        # and by the CLI for cold-start scenarios.
+        full = bool(body.get("full"))
+
         py = str(VENV_PY) if VENV_PY.exists() else sys.executable
         cmd = [py, "-u", str(FETCH_SCRIPT), "--non-interactive"]
         if totp_code:
             cmd += ["--totp", totp_code]
+        if full:
+            cmd += ["--full"]
 
         # Atomically reserve the "running" slot. If another update is
         # already in flight (double-click, two browser tabs, etc.), refuse

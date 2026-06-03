@@ -335,6 +335,10 @@ const SHARED_CHROME_HTML = `
       oninput="onTotpInput(event)"
       onkeydown="if (event.key === 'Enter') submitTotp()"
     >
+    <label class="modal-checkbox" style="display:flex; align-items:flex-start; gap:8px; font-size:12px; color: var(--muted); margin: -4px 0 16px; cursor: pointer; line-height: 1.4;">
+      <input type="checkbox" id="totp-full-reload" style="margin-top: 2px;">
+      <span>Recargar <b>todo desde cero</b> (descarga lenta — solo cuando cambiaste de cuenta o quieres limpiar datos viejos)</span>
+    </label>
     <div class="modal-btns">
       <button class="secondary" onclick="closeModal()">Cancelar</button>
       <button class="primary" id="totp-submit" onclick="submitTotp()">Actualizar</button>
@@ -509,7 +513,11 @@ async function refreshDashboardData() {
   location.reload();
 }
 
-async function triggerUpdate(totpCode = null) {
+async function triggerUpdate(totpCode = null, opts = {}) {
+  // opts.full: bypass incremental and force a full-window refetch.
+  // Used by "Recargar todo desde cero" in the TOTP modal and by the
+  // Settings page's force-reload button.
+  const fullReload = opts.full === true;
   const btn = document.getElementById("update-btn");
   btn.disabled = true;
   btn.textContent = totpCode ? "⟳ Verificando código..." : "⟳ Conectando...";
@@ -547,10 +555,13 @@ async function triggerUpdate(totpCode = null) {
 
   let res;
   try {
+    const reqBody = {};
+    if (totpCode) reqBody.totp_code = totpCode;
+    if (fullReload) reqBody.full = true;
     res = await fetch("/update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(totpCode ? { totp_code: totpCode } : {}),
+      body: JSON.stringify(reqBody),
     });
   } catch (err) {
     stopOverlay();
@@ -649,9 +660,11 @@ function onTotpInput(e) {
 
 function submitTotp() {
   const code = document.getElementById("totp-input").value.trim();
+  const fullEl = document.getElementById("totp-full-reload");
+  const full = fullEl ? fullEl.checked === true : false;
   if (!(code.length === 6 && /^\d+$/.test(code))) return;
   document.getElementById("totp-submit").disabled = true;
-  triggerUpdate(code);
+  triggerUpdate(code, { full });
 }
 
 // ----------------------------------------------------------------------
