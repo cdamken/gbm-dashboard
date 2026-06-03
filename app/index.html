@@ -278,7 +278,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <div class="value" id="total-pnl">—</div>
     <div class="delta" id="total-pnl-pct">—</div>
   </div>
-  <div class="card" title="Annualized money-weighted return (XIRR) using external deposits/withdrawals as cashflows and today's portfolio value as terminal. Only sees the last 365 days of transactions — older flows can't be retrieved from GBM's API.">
+  <div class="card" title="Retorno anualizado money-weighted (XIRR) usando depósitos/retiros externos como flujos y el valor actual del portafolio como terminal. La ventana de transacciones es configurable en Configuración (default 10 años) — si tu XIRR muestra '—', sube los días para incluir tus depósitos más antiguos.">
     <div class="label">XIRR (anualizado)</div>
     <div class="value" id="xirr-value">—</div>
     <div class="delta muted" id="xirr-detail">basado en flujos externos</div>
@@ -572,7 +572,7 @@ function accountValue(account) {
 // (Newton-Raphson with several starting guesses + bisection fallback).
 //
 // IMPORTANT GBM-specific limitation:
-//   GBM's transaction API only returns the last 365 days (configurable
+//   GBM's transaction API has no hard date ceiling — the dashboard's days config (configurable
 //   via GBM_TRANSACTIONS_DAYS). The lifetime XIRR can't be computed
 //   without the full history of deposits/withdrawals. What we DO compute
 //   is the XIRR of the cashflows in our window + today's full portfolio
@@ -885,7 +885,7 @@ function renderCards() {
         ? "sin flujos externos en la ventana"
         : `${externalCount} flujo${externalCount === 1 ? "" : "s"} externo${externalCount === 1 ? "" : "s"} en ${spanDays}d — historial insuficiente`;
     xirrDetailEl.title =
-      "GBM solo expone los últimos 365 días de transacciones. Si la mayor parte de tu capital se depositó antes, XIRR no puede reconciliar la ventana corta con el valor actual. Mejorará cuando haya 12+ meses de historial visible.";
+      "XIRR necesita ver tus depósitos externos para reconciliar contra el valor actual. Si la ventana de transacciones (Configuración → Libro Diario) es más corta que tu historial real en GBM, sube los días — el default ahora es 10 años (3650).";
     return;
   }
   const pct = (r * 100).toFixed(2) + "%";

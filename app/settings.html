@@ -205,13 +205,14 @@ body {
       <h2>📊 Rangos de datos</h2>
       <p class="section-desc">
         Cuántos días hacia atrás bajar al hacer ⟳ Actualizar. Valores
-        mayores → más datos pero el fetch tarda más. Defaults: órdenes 90,
-        dividendos y libro diario 365.
+        mayores → más datos pero el fetch tarda más. Defaults: 10 años
+        (3650 días) — la ventana máxima validada.
         <br><br>
-        <b>Tip</b>: la API de GBM no impone un límite duro de fecha. Si
-        quieres que <b>XIRR</b> y la <b>línea de patrimonio</b> en Análisis
-        empiecen a tener sentido, sube "Libro Diario" a 1095 (3 años) o
-        más — así el cálculo cubre la historia real de depósitos.
+        <b>Tip</b>: la API de GBM no impone un límite duro de fecha; la
+        librería pagina el rango que pidas. Si las actualizaciones se
+        sienten lentas, baja los días — XIRR y la línea de patrimonio
+        funcionan bien siempre que la ventana cubra tus depósitos más
+        antiguos.
         Algunos endpoints sí pueden empezar a fallar con rangos muy
         grandes; si pasa, baja el número.
       </p>
@@ -304,9 +305,9 @@ async function loadAll() {
   try {
     const r = await fetch("/settings", { cache: "no-store" });
     const s = await r.json();
-    document.getElementById("orders-days-input").value       = s.orders_days ?? 90;
-    document.getElementById("dividends-days-input").value    = s.dividends_days ?? 365;
-    document.getElementById("transactions-days-input").value = s.transactions_days ?? 365;
+    document.getElementById("orders-days-input").value       = s.orders_days ?? 3650;
+    document.getElementById("dividends-days-input").value    = s.dividends_days ?? 3650;
+    document.getElementById("transactions-days-input").value = s.transactions_days ?? 3650;
     document.getElementById("about-dashboard-version").textContent = s.dashboard_version || "—";
     document.getElementById("about-api-version").textContent       = s.gbm_mx_api_version || "—";
   } catch (_) {}

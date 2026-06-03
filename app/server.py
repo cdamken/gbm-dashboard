@@ -124,10 +124,16 @@ def _write_env(email: str, password: str) -> None:
 
 # Days-back env keys controllable from the Settings page. Defaults
 # match the fallbacks in fetch_data.py.
+#
+# Defaults: 10 years (the validated maximum, 1..3650). GBM's API
+# doesn't impose a hard ceiling on date range — we paginate. Old
+# defaults (90/365/365) made XIRR look broken on accounts older than
+# one year because the metric couldn't reconcile flows it never saw.
+# Users can lower these in Configuración for faster updates.
 _DAYS_KEYS = {
-    "orders_days":       ("GBM_ORDERS_DAYS",       90),
-    "dividends_days":    ("GBM_DIVIDENDS_DAYS",   365),
-    "transactions_days": ("GBM_TRANSACTIONS_DAYS", 365),
+    "orders_days":       ("GBM_ORDERS_DAYS",      3650),
+    "dividends_days":    ("GBM_DIVIDENDS_DAYS",   3650),
+    "transactions_days": ("GBM_TRANSACTIONS_DAYS", 3650),
 }
 
 
