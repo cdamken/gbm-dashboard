@@ -742,10 +742,23 @@ function renderNetWorthChart() {
   for (const t of sorted) {
     const date = (t.process_date || "").slice(0, 10);
     if (!date) continue;
+    // Filter system noise (same as the Libro Diario "Mostrar ruido"
+    // toggle in transactions.html): internal transfers, repos, and
+    // Smart Cash GBMF2 sweeps inflate is_buy / is_sell flags with
+    // movements that don't represent real capital deployment. Without
+    // this filter the cost-basis line swings ±$200k per day from
+    // overnight sweeps that net out the same week.
+    const cat = t.category;
+    if (cat === "deposit" || cat === "withdrawal") continue;
+    if (cat === "repo_buy" || cat === "repo_mature") continue;
+    // Money-market funds GBM uses for cash sweeps (peso: GBMF2 BF,
+    // dollar: GBMDINT BO). They appear in multiple sub-accounts; their
+    // buys/sells are auto-roll of idle cash, not capital deployment.
+    if (t.security_id === "GBMF2 BF" || t.security_id === "GBMDINT BO") continue;
     const amt = Math.abs(Number(t.amount) || 0);
-    // Use is_buy/is_sell flags so we cover every buy/sell category
-    // (stocks, funds, repos) uniformly. Dividends, withholdings, fx,
-    // deposits and withdrawals don't change the cost basis.
+    // Use is_buy/is_sell flags so we cover every real buy/sell category
+    // (stocks, funds excl. sweeps) uniformly. Dividends, withholdings,
+    // fx, and external transfers don't change the cost basis.
     if (t.is_buy)       running += amt;
     else if (t.is_sell) running -= amt;
     else continue;

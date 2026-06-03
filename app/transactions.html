@@ -299,7 +299,10 @@ function categoryLabel(c) { return CATEGORY_LABELS[c] || c || "—"; }
 function isNoise(t) {
   if (t.category === "deposit" || t.category === "withdrawal") return true;
   if (t.category === "repo_buy" || t.category === "repo_mature") return true;
-  if (t.account_legacy_id === "EP47NC05" && t.security_id === "GBMF2 BF") return true;
+  // Money-market sweep funds (peso GBMF2 BF, dollar GBMDINT BO). These
+  // appear in multiple sub-accounts (Personal + Asesor), so match by
+  // security_id alone rather than account.
+  if (t.security_id === "GBMF2 BF" || t.security_id === "GBMDINT BO") return true;
   return false;
 }
 
