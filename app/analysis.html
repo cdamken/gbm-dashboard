@@ -271,9 +271,12 @@ async function load() {
 
     // Benchmarks: fetched lazily via /benchmark/{symbol} (24h cache).
     // Errors don't block the page — the overlay just doesn't render.
+    // ^GSPC is the S&P 500 index itself (price-return, no ETF
+    // expense ratio or dividend drag); SPY tracks it but lags
+    // ~0.09% / year. Carlos prefers the pure index as benchmark.
     state.benchmarks = await Promise.all([
       safeJson("/benchmark/NAFTRACISHRS.MX"),
-      safeJson("/benchmark/SPY"),
+      safeJson("/benchmark/" + encodeURIComponent("^GSPC")),
     ]);
 
     if (!accounts) {
@@ -814,12 +817,12 @@ function renderNetWorthChart() {
 
   // Benchmark replay overlays. Each is a sparse map (date → value); align
   // to the user's filteredDates with nulls for missing months — Chart.js
-  // skips nulls cleanly. The MX benchmark (NAFTRAC) and USA (SPY) get
-  // separate colors. If a benchmark fetch failed earlier, the value is
-  // null and we skip its dataset entirely.
-  const [benchNAFTRAC, benchSPY] = state.benchmarks || [null, null];
+  // skips nulls cleanly. The MX benchmark (NAFTRAC) and USA (S&P 500
+  // index ^GSPC) get separate colors. If a benchmark fetch failed
+  // earlier, the value is null and we skip its dataset entirely.
+  const [benchNAFTRAC, benchSP500] = state.benchmarks || [null, null];
   const naftracMap = _replayBenchmark(benchNAFTRAC, dailyMap);
-  const spyMap     = _replayBenchmark(benchSPY,     dailyMap);
+  const sp500Map   = _replayBenchmark(benchSP500,   dailyMap);
   const alignBench = (m) => {
     if (!m) return null;
     // For each user date, find the benchmark value on the SAME day.
@@ -828,7 +831,7 @@ function renderNetWorthChart() {
     return filteredDates.map(d => m[d] ?? null);
   };
   const naftracValues = alignBench(naftracMap);
-  const spyValues = alignBench(spyMap);
+  const sp500Values = alignBench(sp500Map);
 
   const datasets = [
     {
@@ -864,10 +867,10 @@ function renderNetWorthChart() {
       spanGaps: true,
     });
   }
-  if (spyValues && spyValues.some(v => v != null)) {
+  if (sp500Values && sp500Values.some(v => v != null)) {
     datasets.push({
-      label: "Si compraras SPY en su lugar",
-      data: spyValues,
+      label: "Si invirtieras en el S&P 500 en su lugar",
+      data: sp500Values,
       borderColor: "#4ade80",
       backgroundColor: "transparent",
       borderWidth: 2,
