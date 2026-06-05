@@ -557,11 +557,21 @@ async function triggerUpdate(totpCode = null, opts = {}) {
   const startOverlay = () => {
     if (overlayShown) return;
     overlayShown = true;
+    // If we got here from the TOTP modal (user just typed a code),
+    // close that modal as the progress overlay takes over — otherwise
+    // both stack on top of each other and look broken.
+    if (totpCode) closeModal();
     showProgressOverlay();
     pollTimer = startProgressPolling();
     btn.textContent = "🔄 Actualizando...";
   };
+  // 0 ms delay when the user just typed a TOTP — the fetch WILL be slow.
+  // 700 ms when this is the first probe — quick responses (mfa_required,
+  // bad credentials) get to dismiss before the overlay even appears.
+  const overlayDelay = totpCode != null ? 0 : 700;
+  const overlayTimer = setTimeout(startOverlay, overlayDelay);
   const stopOverlay = () => {
+    if (overlayTimer) clearTimeout(overlayTimer);
     if (pollTimer) {
       stopProgressPolling(pollTimer);
       pollTimer = null;
@@ -571,21 +581,6 @@ async function triggerUpdate(totpCode = null, opts = {}) {
       overlayShown = false;
     }
   };
-  // Only show the toast when we KNOW the fetch will run for minutes
-  // — i.e. when the user has just typed a TOTP code. The first probe
-  // (no TOTP) only verifies the session and either succeeds immediately
-  // or returns mfa_required to open the modal; for that path the
-  // button text "🔄 Conectando..." is the only feedback we show.
-  //
-  // Earlier versions deferred the toast 700 ms (then 5500 ms) for the
-  // first probe — but Cognito occasionally ran longer than the timer,
-  // briefly showing the toast on top of (or just before) the MFA modal.
-  // From the user's perspective the page looked like it was already
-  // updating before they entered the code. Removing the first-probe
-  // toast eliminates that race entirely.
-  if (totpCode != null) {
-    startOverlay();
-  }
 
   let res;
   try {
@@ -605,6 +600,7 @@ async function triggerUpdate(totpCode = null, opts = {}) {
     return;
   }
 
+  clearTimeout(overlayTimer);
   if (pollTimer) stopProgressPolling(pollTimer);
 
   let payload = {};
@@ -667,11 +663,6 @@ function openModal(errorMsg = null) {
     errEl.classList.add("hidden");
   }
   input.value = "";
-  // Always start with Full Reload unchecked — mirrors TR's openMfaModal.
-  // Otherwise a stale `true` from a previous attempt could silently
-  // re-trigger an expensive wipe-and-redownload.
-  const cb = document.getElementById("totp-full-reload");
-  if (cb) cb.checked = false;
   document.getElementById("totp-submit").disabled = true;
   modal.classList.add("show");
   setTimeout(() => input.focus(), 100);
@@ -702,12 +693,6 @@ function submitTotp() {
   const full = fullEl ? fullEl.checked === true : false;
   if (!(code.length === 6 && /^\d+$/.test(code))) return;
   document.getElementById("totp-submit").disabled = true;
-  // Close the modal synchronously so triggerUpdate's startOverlay
-  // never has a frame where modal + toast are both visible. Mirrors
-  // Trade-Republic-Dashboard's submitMfa: read state → close modal
-  // → trigger fetch. Read the checkbox FIRST (above) so closing the
-  // modal afterwards can't lose its state.
-  closeModal();
   triggerUpdate(code, { full });
 }
 
