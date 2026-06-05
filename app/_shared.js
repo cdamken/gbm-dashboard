@@ -4,7 +4,7 @@
 // (no modules, no bundler, no build step).
 //
 // In addition to formatting helpers, this file owns the **shared chrome**:
-//   - the "⟳ Actualizar" button + "⚙ Cuenta" button in the subtitle
+//   - the "🔄 Actualizar" button + "⚙ Cuenta" button in the subtitle
 //   - the staleness chip next to "Última actualización"
 //   - the TOTP modal
 //   - the GBM+ credentials (config) modal
@@ -423,7 +423,7 @@ function injectTopBar() {
     </div>
     <nav></nav>
     <div class="actions">
-      <button class="update-btn" id="update-btn" type="button">⟳ Actualizar</button>
+      <button class="update-btn" id="update-btn" type="button">🔄 Actualizar</button>
     </div>
   `;
   const nav = bar.querySelector("nav");
@@ -484,7 +484,7 @@ async function refreshStalenessChip() {
     chip.textContent = stale.label;
     chip.className = "staleness-chip show " + stale.severity;
     const hint = stale.severity === "stale"
-      ? "Tu snapshot es viejo — dale ⟳ Actualizar."
+      ? "Tu snapshot es viejo — dale 🔄 Actualizar."
       : stale.severity === "warn"
       ? "Tu snapshot tiene más de 15 min."
       : "Datos frescos.";
@@ -545,7 +545,7 @@ async function triggerUpdate(totpCode = null, opts = {}) {
   const fullReload = opts.full === true;
   const btn = document.getElementById("update-btn");
   btn.disabled = true;
-  btn.textContent = totpCode ? "⟳ Verificando código..." : "⟳ Conectando...";
+  btn.textContent = totpCode ? "🔄 Verificando código..." : "🔄 Conectando...";
 
   // Defer the heavy overlay: the first call (no TOTP) might immediately
   // come back with mfa_required, in which case we don't want to flash
@@ -559,7 +559,7 @@ async function triggerUpdate(totpCode = null, opts = {}) {
     overlayShown = true;
     showProgressOverlay();
     pollTimer = startProgressPolling();
-    btn.textContent = "⟳ Actualizando...";
+    btn.textContent = "🔄 Actualizando...";
   };
   const stopOverlay = () => {
     if (pollTimer) {
@@ -575,7 +575,7 @@ async function triggerUpdate(totpCode = null, opts = {}) {
   // — i.e. when the user has just typed a TOTP code. The first probe
   // (no TOTP) only verifies the session and either succeeds immediately
   // or returns mfa_required to open the modal; for that path the
-  // button text "⟳ Conectando..." is the only feedback we show.
+  // button text "🔄 Conectando..." is the only feedback we show.
   //
   // Earlier versions deferred the toast 700 ms (then 5500 ms) for the
   // first probe — but Cognito occasionally ran longer than the timer,
@@ -600,7 +600,7 @@ async function triggerUpdate(totpCode = null, opts = {}) {
   } catch (err) {
     stopOverlay();
     btn.disabled = false;
-    btn.textContent = "⟳ Actualizar";
+    btn.textContent = "🔄 Actualizar";
     alert("No se pudo conectar al server.\nDetalle: " + err.message);
     return;
   }
@@ -612,19 +612,19 @@ async function triggerUpdate(totpCode = null, opts = {}) {
 
   if (res.ok && payload.status === "ok") {
     closeModal();
-    btn.textContent = "⟳ Refrescando vista...";
+    btn.textContent = "🔄 Refrescando vista...";
     await refreshDashboardData();
     broadcastUpdateComplete();   // tell other tabs to refresh their chip
     stopOverlay();
     btn.disabled = false;
-    btn.textContent = "⟳ Actualizar";
+    btn.textContent = "🔄 Actualizar";
     return;
   }
 
   // Handle the documented error statuses from the server.
   stopOverlay();
   btn.disabled = false;
-  btn.textContent = "⟳ Actualizar";
+  btn.textContent = "🔄 Actualizar";
 
   if (payload.status === "mfa_required") {
     openModal();
