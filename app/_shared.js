@@ -239,37 +239,61 @@ const SHARED_CHROME_CSS = `
   font-size: 11px; color: var(--muted); margin-top: 12px; text-align: center;
 }
 
-/* progress overlay shown while /update is running.
-   Background fully transparent — Carlos wants the page content
-   behind to remain visible, not dimmed. The overlay still blocks
-   pointer events on the page (default pointer-events: auto on the
-   div) so the user can't trigger a second update mid-flight. */
-.progress-overlay {
-  position: fixed; inset: 0; background: transparent;
-  display: none; align-items: center; justify-content: center;
-  z-index: 200;
+/* Non-blocking update flow — ported from Trade-Republic-Dashboard.
+   The previous design was a full-viewport overlay that intercepted
+   clicks and dimmed the page; Carlos prefers TR's pattern where
+   updates surface as a thin progress bar at the top of the viewport
+   plus a small toast under the cockpit. Both are non-blocking, so
+   the user keeps scrolling/clicking while the fetch runs. */
+
+/* Thin progress bar pinned to the very top of the viewport. */
+.progress-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  z-index: 100; pointer-events: none;
+  display: none;
 }
-.progress-overlay.show { display: flex; }
-.progress-box {
+.progress-bar.active { display: block; }
+.progress-bar.indet {
+  background: linear-gradient(90deg, transparent 0%, var(--blue) 50%, transparent 100%);
+  background-size: 50% 100%; background-repeat: no-repeat;
+  animation: gbm-pb-slide 1.6s ease-in-out infinite;
+}
+@keyframes gbm-pb-slide {
+  0%   { background-position: -50% 0; }
+  100% { background-position: 150% 0; }
+}
+
+/* Toast — top-center, under the sticky top-bar. Non-blocking. */
+.toast {
+  position: fixed; top: 200px; left: 50%; transform: translateX(-50%) translateY(-10px);
   background: var(--card); border: 1px solid var(--border);
-  border-radius: 12px; padding: 32px; max-width: 540px; width: 92%;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-  text-align: center;
+  border-top: 3px solid var(--blue);
+  padding: 12px 20px; border-radius: 0 0 10px 10px;
+  min-width: 320px; max-width: 520px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  display: none; z-index: 90;
+  font-size: 14px; text-align: center;
+  opacity: 0; transition: opacity 0.18s, transform 0.18s;
 }
-.progress-box h2 { font-size: 22px; margin-bottom: 12px; }
-.progress-box .progress-stage {
-  color: var(--text); font-size: 15px; margin-bottom: 8px; min-height: 22px;
-  transition: opacity 0.2s;
+.toast.active { display: block; opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast .t-title { font-weight: 700; margin-bottom: 4px;
+  display: flex; align-items: center; justify-content: center; gap: 10px; }
+.toast .t-stage { color: var(--muted); font-size: 12px; }
+.toast.ok  { border-top-color: var(--green); }
+.toast.err { border-top-color: var(--red);   }
+.toast .t-close {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  position: absolute; top: 6px; right: 10px; font-size: 16px; padding: 0;
 }
-.progress-box .progress-hint {
-  color: var(--muted); font-size: 12px; line-height: 1.5;
+.toast .spin {
+  width: 14px; height: 14px; display: inline-block;
+  border: 2px solid var(--border); border-top-color: var(--blue);
+  border-radius: 50%; animation: gbm-spin 0.9s linear infinite;
 }
-.spinner {
-  width: 56px; height: 56px; margin: 8px auto 24px;
-  border: 4px solid var(--border); border-top-color: var(--blue);
-  border-radius: 50%; animation: spin 0.9s linear infinite;
+@keyframes gbm-spin { to { transform: rotate(360deg); } }
+@media (max-width: 700px) {
+  .toast { min-width: 80vw; max-width: 95vw; top: 220px; }
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 `;
 
 // Modal + overlay HTML appended to <body> on every page.
@@ -349,16 +373,17 @@ const SHARED_CHROME_HTML = `
   </div>
 </div>
 
-<!-- Progress overlay shown while fetching -->
-<div class="progress-overlay" id="progress-overlay">
-  <div class="progress-box">
-    <div class="spinner"></div>
-    <h2>Actualizando tu portafolio</h2>
-    <div class="progress-stage" id="progress-stage">Conectando con GBM…</div>
-    <div class="progress-hint">
-      Esto puede tardar un par de minutos. Por favor, no cierres la pestaña.
-    </div>
+<!-- Thin progress bar pinned to the top of the viewport. -->
+<div id="progress-bar" class="progress-bar"></div>
+
+<!-- Non-blocking toast under the top-bar — shows the current stage. -->
+<div id="toast" class="toast">
+  <button id="toast-close-btn" class="t-close" aria-label="Cerrar">×</button>
+  <div class="t-title">
+    <span class="spin"></span>
+    <span id="toast-title">Actualizando tu portafolio</span>
   </div>
+  <div class="t-stage" id="progress-stage">Conectando con GBM…</div>
 </div>
 `;
 
@@ -773,13 +798,27 @@ const PROGRESS_STAGES = [
 let _progressStartedAt = null;
 
 function showProgressOverlay() {
-  document.getElementById("progress-overlay").classList.add("show");
-  document.getElementById("progress-stage").textContent = PROGRESS_STAGES[0].text;
+  // Surface the thin top progress-bar + the toast under the top-bar.
+  // Both are non-blocking — page stays interactive while the fetch runs.
+  const bar = document.getElementById("progress-bar");
+  const toast = document.getElementById("toast");
+  const stage = document.getElementById("progress-stage");
+  const title = document.getElementById("toast-title");
+  if (bar) bar.classList.add("active", "indet");
+  if (toast) {
+    toast.classList.remove("ok", "err");
+    toast.classList.add("active");
+  }
+  if (title) title.textContent = "Actualizando tu portafolio";
+  if (stage) stage.textContent = PROGRESS_STAGES[0].text;
   _progressStartedAt = Date.now();
 }
 
 function hideProgressOverlay() {
-  document.getElementById("progress-overlay").classList.remove("show");
+  const bar = document.getElementById("progress-bar");
+  const toast = document.getElementById("toast");
+  if (bar) bar.classList.remove("active", "indet");
+  if (toast) toast.classList.remove("active");
   _progressStartedAt = null;
 }
 
@@ -831,6 +870,12 @@ window.addEventListener("DOMContentLoaded", () => {
   // didn't trigger the update still catches up to one that did.
   setInterval(refreshStalenessChip, 60_000);
   injectSharedChromeHtml();
+
+  // Toast close button (dismisses the non-blocking status banner manually).
+  const toastClose = document.getElementById("toast-close-btn");
+  if (toastClose) toastClose.addEventListener("click", () => {
+    document.getElementById("toast").classList.remove("active");
+  });
 
   // Escape closes any open modal.
   document.addEventListener("keydown", (e) => {
