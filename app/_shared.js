@@ -724,15 +724,102 @@ function onTotpInput(_e) {
   revalidateTotpSubmit();
 }
 
-function submitTotp() {
+// Verbatim port of Trade-Republic-owncloud's submitMfa() flow:
+// read state → close modal SYNC → show toast SYNC → await fetch
+// → handle response. Self-contained on purpose: delegating to the
+// shared triggerUpdate() (which uses setTimeout(startOverlay, 0))
+// occasionally left the modal open and the toast invisible
+// because the deferred startOverlay wasn't firing reliably. TR's
+// pattern has worked unmodified for months; mirror it.
+async function submitTotp() {
   const code = document.getElementById("totp-input").value.trim();
+  const errEl = document.getElementById("totp-error");
+  errEl.classList.add("hidden");
+  if (!(code.length === 6 && /^\d+$/.test(code))) {
+    errEl.textContent = "El código debe ser de 6 dígitos.";
+    errEl.classList.remove("hidden");
+    return;
+  }
   const fullEl = document.getElementById("totp-full-reload");
-  const full = fullEl ? fullEl.checked === true : false;
-  // Re-validate at click time (not just at input time) — in case the
-  // user got here via Enter on a path that bypassed onTotpInput.
-  if (!(code.length === 6 && /^\d+$/.test(code))) return;
-  document.getElementById("totp-submit").disabled = true;
-  triggerUpdate(code, { full });
+  const fullReload = fullEl ? fullEl.checked === true : false;
+  const submitBtn = document.getElementById("totp-submit");
+  const topBtn = document.getElementById("update-btn");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Verificando...";
+  topBtn.disabled = true;
+  topBtn.textContent = fullReload ? "🔄 Re-descargando todo..." : "🔄 Actualizando...";
+
+  // Close modal + show toast SYNCHRONOUSLY before the fetch — no
+  // setTimeout, no race. Identical to TR's submitMfa().
+  closeModal();
+  showProgressOverlay();
+  const pollTimer = startProgressPolling();
+
+  let res;
+  try {
+    res = await fetch("/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ totp_code: code, ...(fullReload ? { full: true } : {}) }),
+    });
+  } catch (err) {
+    stopProgressPolling(pollTimer);
+    hideProgressOverlay();
+    topBtn.disabled = false;
+    topBtn.textContent = "🔄 Actualizar";
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Actualizar";
+    alert("No se pudo conectar al server.\nDetalle: " + err.message);
+    return;
+  }
+
+  stopProgressPolling(pollTimer);
+
+  let payload = {};
+  try { payload = await res.json(); } catch (_) {}
+
+  if (res.ok && payload.status === "ok") {
+    topBtn.textContent = "🔄 Refrescando vista...";
+    await refreshDashboardData();
+    broadcastUpdateComplete();
+    hideProgressOverlay();
+    topBtn.disabled = false;
+    topBtn.textContent = "🔄 Actualizar";
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Actualizar";
+    return;
+  }
+
+  hideProgressOverlay();
+  topBtn.disabled = false;
+  topBtn.textContent = "🔄 Actualizar";
+  submitBtn.disabled = false;
+  submitBtn.textContent = "Actualizar";
+
+  if (payload.status === "mfa_invalid") {
+    openModal("Código incorrecto o ya expiró. Genera uno nuevo en tu app.");
+    return;
+  }
+  if (payload.status === "mfa_required") {
+    openModal();
+    return;
+  }
+  if (payload.status === "auth_failed") {
+    openConfigModal();
+    const cfgErr = document.getElementById("config-error");
+    cfgErr.textContent = "Las credenciales son incorrectas o GBM las rechazó. Corrige y reintenta.";
+    cfgErr.classList.remove("hidden");
+    return;
+  }
+  if (payload.status === "config_error") {
+    openConfigModal(true);
+    return;
+  }
+  if (payload.status === "api_error" || payload.status === "timeout") {
+    alert("La API de GBM falló: " + (payload.detail || "sin detalle"));
+    return;
+  }
+  alert("Update falló (HTTP " + res.status + "): " + (payload.detail || "sin detalle"));
 }
 
 // ----------------------------------------------------------------------
