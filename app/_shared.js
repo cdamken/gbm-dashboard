@@ -554,7 +554,6 @@ async function triggerUpdate(totpCode = null, opts = {}) {
   // the overlay right away.
   let overlayShown = false;
   let pollTimer = null;
-  let overlayTimer = null;
   const startOverlay = () => {
     if (overlayShown) return;
     overlayShown = true;
@@ -563,7 +562,6 @@ async function triggerUpdate(totpCode = null, opts = {}) {
     btn.textContent = "⟳ Actualizando...";
   };
   const stopOverlay = () => {
-    if (overlayTimer) clearTimeout(overlayTimer);
     if (pollTimer) {
       stopProgressPolling(pollTimer);
       pollTimer = null;
@@ -573,17 +571,20 @@ async function triggerUpdate(totpCode = null, opts = {}) {
       overlayShown = false;
     }
   };
-  // TOTP submit path: show toast IMMEDIATELY — submitTotp already
-  // closed the modal synchronously, and this fetch will take minutes.
-  // First-probe path (no TOTP): defer 5500 ms so a quick mfa_required
-  // can dismiss the timer before the toast ever appears. Matches the
-  // Trade-Republic-Dashboard pattern (was 700 ms before — too eager,
-  // the toast would flash on top of the MFA modal when Cognito
-  // responses ran > 700 ms).
+  // Only show the toast when we KNOW the fetch will run for minutes
+  // — i.e. when the user has just typed a TOTP code. The first probe
+  // (no TOTP) only verifies the session and either succeeds immediately
+  // or returns mfa_required to open the modal; for that path the
+  // button text "⟳ Conectando..." is the only feedback we show.
+  //
+  // Earlier versions deferred the toast 700 ms (then 5500 ms) for the
+  // first probe — but Cognito occasionally ran longer than the timer,
+  // briefly showing the toast on top of (or just before) the MFA modal.
+  // From the user's perspective the page looked like it was already
+  // updating before they entered the code. Removing the first-probe
+  // toast eliminates that race entirely.
   if (totpCode != null) {
     startOverlay();
-  } else {
-    overlayTimer = setTimeout(startOverlay, 5500);
   }
 
   let res;
@@ -604,7 +605,6 @@ async function triggerUpdate(totpCode = null, opts = {}) {
     return;
   }
 
-  clearTimeout(overlayTimer);
   if (pollTimer) stopProgressPolling(pollTimer);
 
   let payload = {};
