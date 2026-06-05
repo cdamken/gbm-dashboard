@@ -206,10 +206,13 @@ const SHARED_CHROME_CSS = `
 }
 .modal input.totp:focus { outline: none; border-color: var(--blue); }
 /* Field labels (e.g. "Email", "Contraseña") above each input — small,
-   uppercased, muted. Excludes `.modal-checkbox`, which is a wrapper
-   around a checkbox + description sentence and must render as normal
-   prose (the upper-case rule was bleeding into it and turned the
-   Recargar-todo blurb into ALL-CAPS). */
+   uppercased, muted. Excludes .modal-checkbox (wrapper around a
+   checkbox + description sentence — must render as normal prose, the
+   upper-case rule was bleeding into it and turned the Recargar-todo
+   blurb into ALL-CAPS). NB: no backticks in this comment — the whole
+   SHARED_CHROME_CSS is a template literal and stray backticks close
+   it prematurely (regression 2026-06-05 → top-bar and update flow
+   disappeared from the local dashboard). */
 .modal label:not(.modal-checkbox) {
   display: block; font-size: 12px; text-transform: uppercase;
   letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;
