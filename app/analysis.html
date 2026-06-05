@@ -7,8 +7,12 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>GBM Análisis</title>
-<!-- Chart.js for the visualization charts. CDN-cached after first load. -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Chart.js vendored locally so we don't depend on the CDN (some
+     network configs / ad blockers block jsdelivr, and the page is
+     useless without Chart.js — see 2026-06-05 incident where Carlos
+     couldn't see the SP500 overlay because Chart.js failed to load
+     from cdn.jsdelivr.net). -->
+<script src="vendor/chart.umd.min.js"></script>
 <style>
 :root {
   --bg: #0f1419;
