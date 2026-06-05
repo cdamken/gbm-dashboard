@@ -273,6 +273,11 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <div class="value" id="total-value">—</div>
     <div class="delta muted">suma de todas las cuentas</div>
   </div>
+  <div class="card" title="Costo total — suma del precio promedio × cantidad de todas tus posiciones. Es el capital comprometido en instrumentos (no incluye cash idle). Equivalente al 'Investment Cost' del dashboard de TR.">
+    <div class="label">Costo invertido</div>
+    <div class="value" id="investment-cost">—</div>
+    <div class="delta muted">suma de compras netas</div>
+  </div>
   <div class="card">
     <div class="label">P&L acumulado</div>
     <div class="value" id="total-pnl">—</div>
@@ -282,6 +287,11 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <div class="label">XIRR (anualizado)</div>
     <div class="value" id="xirr-value">—</div>
     <div class="delta muted" id="xirr-detail">basado en flujos externos</div>
+  </div>
+  <div class="card" title="Cash sin invertir en cuentas Smart Cash. GBM hace barrido automático a money market funds, así que típicamente es $0 — solo crece si vendiste algo y aún no recompraste.">
+    <div class="label">Cash disponible</div>
+    <div class="value asset-cash" id="available-cash">—</div>
+    <div class="delta muted">Smart Cash sin reinvertir</div>
   </div>
   <div class="card">
     <div class="label">Posiciones</div>
@@ -695,7 +705,18 @@ function aggregates() {
   );
   const totalPnLPct = totalCost > 0 ? totalPnL / totalCost : 0;
   const numPositions = new Set(state.positionsFlat.map(p => p.issue_id)).size;
-  return { totalValue, totalPnL, totalPnLPct, numPositions };
+  // Available cash = sum of Smart Cash account balances. GBM auto-sweeps
+  // idle cash into Smart Cash, so this is "cash sitting around not yet
+  // reinvested" (typically 0 unless the user just sold something and
+  // hasn't recommitted). Matches TR's "Available Cash" KPI semantically.
+  const availableCash = state.accounts.reduce((s, a) => {
+    const t = a.management_type_template || "";
+    if (t === "smart_cash" || t === "wealth") {
+      return s + Number((a.position || {}).amount || 0);
+    }
+    return s;
+  }, 0);
+  return { totalValue, totalPnL, totalPnLPct, numPositions, investmentCost: totalCost, availableCash };
 }
 
 // Per-account P&L computed from positions (historical, not intraday).
@@ -843,8 +864,11 @@ function renderHeader() {
 }
 
 function renderCards() {
-  const { totalValue, totalPnL, totalPnLPct, numPositions } = aggregates();
+  const { totalValue, totalPnL, totalPnLPct, numPositions, investmentCost, availableCash } = aggregates();
   document.getElementById("total-value").textContent = fmtMoney(totalValue, { currency: true });
+
+  // Investment Cost — sum of cost basis across positions.
+  document.getElementById("investment-cost").textContent = fmtMoney(investmentCost, { currency: true });
 
   const pnlEl = document.getElementById("total-pnl");
   pnlEl.textContent = fmtMoney(totalPnL, { sign: true, currency: true });
@@ -853,6 +877,9 @@ function renderCards() {
   const pctEl = document.getElementById("total-pnl-pct");
   pctEl.textContent = fmtPct(totalPnLPct);
   pctEl.className = "delta " + pnlClass(totalPnL);
+
+  // Available Cash — Smart Cash account balances (idle pesos/dollars).
+  document.getElementById("available-cash").textContent = fmtMoney(availableCash, { currency: true });
 
   document.getElementById("num-positions").textContent = numPositions;
   document.getElementById("num-accounts").textContent = state.accounts.length;
