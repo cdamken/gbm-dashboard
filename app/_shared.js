@@ -657,6 +657,12 @@ async function triggerUpdate(totpCode = null, opts = {}) {
   alert("Update falló (HTTP " + res.status + "): " + (payload.detail || "sin detalle"));
 }
 
+// Polls the TOTP input state while the modal is open. Stored on the
+// module so closeModal can clear it. The interval is cheap (~200 ms,
+// just reads .value and toggles a `disabled` attr) but never wasted
+// because closeModal kills it the instant the modal goes away.
+let _totpPollTimer = null;
+
 function openModal(errorMsg = null) {
   const modal = document.getElementById("totp-modal");
   const errEl = document.getElementById("totp-error");
@@ -671,11 +677,19 @@ function openModal(errorMsg = null) {
   document.getElementById("totp-submit").disabled = true;
   modal.classList.add("show");
   setTimeout(() => input.focus(), 100);
+  // Safety-net poll: even when paste / autofill / IME composition
+  // skips the `input` event, the button will catch up within 200 ms.
+  if (_totpPollTimer) clearInterval(_totpPollTimer);
+  _totpPollTimer = setInterval(revalidateTotpSubmit, 200);
 }
 
 function closeModal() {
   const m = document.getElementById("totp-modal");
   if (m) m.classList.remove("show");
+  if (_totpPollTimer) {
+    clearInterval(_totpPollTimer);
+    _totpPollTimer = null;
+  }
 }
 
 function closeModalIfBackdrop(e, which) {
@@ -686,16 +700,36 @@ function closeModalIfBackdrop(e, which) {
   }
 }
 
-function onTotpInput(e) {
-  const cleaned = e.target.value.replace(/\D/g, "").slice(0, 6);
-  e.target.value = cleaned;
-  document.getElementById("totp-submit").disabled = cleaned.length !== 6;
+// Re-evaluates the TOTP submit button state based on the current
+// input value. Called from MULTIPLE events (input, paste, change,
+// focus, blur) AND from a polling interval while the modal is open
+// — Chrome autofill / password-manager fills sometimes don't fire
+// the `input` event, leaving the button stuck on `disabled` even
+// when there's a valid 6-digit code in the field. The poll is the
+// safety net; it stops as soon as the modal closes.
+function revalidateTotpSubmit() {
+  const inp = document.getElementById("totp-input");
+  const btn = document.getElementById("totp-submit");
+  if (!inp || !btn) return;
+  // Strip non-digits + cap to 6 (in case paste pushed extra chars).
+  const cleaned = inp.value.replace(/\D/g, "").slice(0, 6);
+  if (inp.value !== cleaned) inp.value = cleaned;
+  btn.disabled = cleaned.length !== 6;
+}
+
+// Kept as a thin wrapper for the inline `oninput="onTotpInput(event)"`
+// attribute on the modal input (CSP-restricted contexts use
+// addEventListener instead and call revalidateTotpSubmit directly).
+function onTotpInput(_e) {
+  revalidateTotpSubmit();
 }
 
 function submitTotp() {
   const code = document.getElementById("totp-input").value.trim();
   const fullEl = document.getElementById("totp-full-reload");
   const full = fullEl ? fullEl.checked === true : false;
+  // Re-validate at click time (not just at input time) — in case the
+  // user got here via Enter on a path that bypassed onTotpInput.
   if (!(code.length === 6 && /^\d+$/.test(code))) return;
   document.getElementById("totp-submit").disabled = true;
   triggerUpdate(code, { full });
