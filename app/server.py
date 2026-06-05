@@ -24,6 +24,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 from pathlib import Path
 
 PORT = 8086
@@ -235,7 +236,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path.startswith("/benchmark/"):
             # /benchmark/{symbol} — proxy to Yahoo Finance with 24h cache.
-            symbol = self.path[len("/benchmark/"):].split("?", 1)[0]
+            # The client URL-encodes special chars (`^` → `%5E`) so we must
+            # decode here before the regex validator sees the value. Otherwise
+            # `^SP500TR` arrives as the literal string `%5ESP500TR` and gets
+            # rejected as `invalid symbol` (the regex doesn't allow `%`).
+            raw = self.path[len("/benchmark/"):].split("?", 1)[0]
+            symbol = urllib.parse.unquote(raw)
             self._handle_benchmark(symbol)
             return
         if self.path == "/progress":
