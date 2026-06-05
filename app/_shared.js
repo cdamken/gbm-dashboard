@@ -205,12 +205,17 @@ const SHARED_CHROME_CSS = `
   letter-spacing: 8px; margin-bottom: 16px;
 }
 .modal input.totp:focus { outline: none; border-color: var(--blue); }
-.modal label {
+/* Field labels (e.g. "Email", "Contraseña") above each input — small,
+   uppercased, muted. Excludes `.modal-checkbox`, which is a wrapper
+   around a checkbox + description sentence and must render as normal
+   prose (the upper-case rule was bleeding into it and turned the
+   Recargar-todo blurb into ALL-CAPS). */
+.modal label:not(.modal-checkbox) {
   display: block; font-size: 12px; text-transform: uppercase;
   letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;
   margin-top: 14px; font-weight: 600;
 }
-.modal label:first-of-type { margin-top: 0; }
+.modal label:not(.modal-checkbox):first-of-type { margin-top: 0; }
 .modal input.field {
   width: 100%; background: var(--bg); border: 1px solid var(--border);
   color: var(--text); padding: 12px 14px; border-radius: 8px;
