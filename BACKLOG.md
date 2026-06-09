@@ -115,6 +115,20 @@ no por orden de implementación — agarra el que tenga sentido en su momento.
 
 ## 3. Datos / export
 
+- [ ] **Per-page CSV exports** (idea portada desde Scalable-Capital-Dashboard,
+  sesión 2026-06-06). El export SAT actual junta todo en 13 columnas
+  pensadas para Hacienda — útil para impuestos pero malo para análisis.
+  Añadir un botón "↓ Exportar CSV" en cada página con un subset enfocado:
+  - `/export/orders.csv` (Órdenes) — fecha, side, ticker, descripción, cantidad, monto, estado
+  - `/export/dividends.csv` (Dividendos) — fecha, ticker, descripción, monto neto, ISR retenido
+  - `/export/holdings.csv` (Portafolio) — cuenta, ticker, mercado, cantidad, precio promedio, precio actual, valor, P&L
+  - `/export/ledger.csv` (Libro Diario) — fecha, categoría, descripción, monto, cuenta
+
+  Implementación en `Scalable-Capital-Dashboard/app/server.py::_handle_export()` —
+  copy verbatim adaptando los campos al schema GBM (cuentas Personal/
+  Asesor/Smart Cash, mercados BMV/SIC, ISR retenido por dividendos).
+  El SAT-CSV existente queda como caso especializado adicional.
+
 - [x] **Export CSV para SAT** — implementado 2026-06-02. Endpoint
   `GET /export/transactions.csv` retorna CSV con 13 columnas en español
   (fecha/hora/tipo/categoria/descripcion/ticker/cuenta/monto/monto_neto/
