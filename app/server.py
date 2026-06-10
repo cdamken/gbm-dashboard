@@ -234,6 +234,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/export/transactions.csv":
             self._handle_export_transactions_csv()
             return
+        # Per-page CSV exports — focused subsets matching each dashboard
+        # page's columns. Complement to the SAT-shaped 13-column dump.
+        if self.path == "/export/ordenes.csv":
+            return self._handle_export_page_csv("ordenes")
+        if self.path == "/export/historico.csv":
+            return self._handle_export_page_csv("historico")
+        if self.path == "/export/dividendos.csv":
+            return self._handle_export_page_csv("dividendos")
+        if self.path == "/export/transacciones.csv":
+            return self._handle_export_page_csv("transacciones")
+        if self.path == "/export/posiciones.csv":
+            return self._handle_export_page_csv("posiciones")
         if self.path.startswith("/benchmark/"):
             # /benchmark/{symbol} — proxy to Yahoo Finance with 24h cache.
             # The client URL-encodes special chars (`^` → `%5E`) so we must
@@ -510,6 +522,155 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/csv; charset=utf-8")
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_export_page_csv(self, kind: str) -> None:
+        """Per-page CSV exports — one focused subset per dashboard page.
+
+        Spanish column names, comma-delimited, RFC 4180 quoting.
+        Source JSON files live in DATA/; if a file is missing (first
+        run, account doesn't support the data type) we return an empty
+        CSV with only the header row — never 500.
+        """
+        import csv
+        import io
+
+        SPECS = {
+            "ordenes": {
+                "file": "orders.json",
+                "list_key": "orders",
+                "columns": [
+                    "fecha", "side", "ticker", "descripcion", "mercado",
+                    "cantidad", "monto", "estado",
+                ],
+                "row": lambda o: [
+                    (str(o.get("operation_date") or "")[:10]),
+                    "Compra" if o.get("is_buy") else "Venta" if o.get("is_sell") else "",
+                    o.get("security_id") or "",
+                    o.get("description") or "",
+                    o.get("market_label") or o.get("market") or "",
+                    f"{float(o.get('quantity') or 0):.4f}",
+                    f"{float(o.get('amount') or 0):.4f}",
+                    o.get("status") or "filled",
+                ],
+            },
+            "historico": {
+                # Same data file as Histórico page (every status).
+                "file": "orders_all.json",
+                "list_key": "orders",
+                "columns": [
+                    "fecha", "ticker", "side", "cantidad", "monto", "estado",
+                ],
+                "row": lambda o: [
+                    (str(o.get("operation_date") or "")[:10]),
+                    o.get("security_id") or "",
+                    "Compra" if o.get("is_buy") else "Venta" if o.get("is_sell") else "",
+                    f"{float(o.get('quantity') or 0):.4f}",
+                    f"{float(o.get('amount') or 0):.4f}",
+                    o.get("status") or "",
+                ],
+            },
+            "dividendos": {
+                "file": "dividends.json",
+                "list_key": "dividends",
+                "columns": [
+                    "fecha", "ticker", "descripcion", "monto_bruto",
+                    "isr_retenido", "monto_neto",
+                ],
+                "row": lambda d: [
+                    (str(d.get("payment_date") or d.get("ex_date") or "")[:10]),
+                    d.get("security_id") or "",
+                    d.get("description") or "",
+                    f"{float(d.get('gross_amount') or d.get('amount') or 0):.4f}",
+                    f"{float(d.get('tax_withheld') or d.get('tax') or 0):.4f}",
+                    f"{float(d.get('net_amount') or 0):.4f}",
+                ],
+            },
+            "transacciones": {
+                # Libro Diario — all cash movements, lighter than the
+                # SAT-shaped /export/transactions.csv (6 cols vs 13).
+                "file": "transactions.json",
+                "list_key": "transactions",
+                "columns": [
+                    "fecha", "ticker", "descripcion", "monto",
+                    "categoria", "cuenta",
+                ],
+                "row": lambda t: [
+                    (str(t.get("process_date") or "")[:10]),
+                    t.get("security_id") or "",
+                    t.get("description") or "",
+                    f"{float(t.get('amount') or 0):.4f}",
+                    t.get("category") or "",
+                    t.get("account_name") or t.get("account_legacy_id") or "",
+                ],
+            },
+            "posiciones": {
+                # Portafolio — flat list of every position across accounts.
+                # positions.json shape is {<account_id>: [positions...], ...}
+                "file": "positions.json",
+                "list_key": None,  # not a list — see custom flatten below
+                "columns": [
+                    "ticker", "cuenta", "cantidad", "precio_promedio",
+                    "ultimo_precio", "valor_mercado", "pnl_mxn", "pnl_pct",
+                ],
+                "row": lambda p: [
+                    p.get("issue_id") or p.get("security_id") or "",
+                    p.get("_account_name") or "",
+                    f"{float(p.get('quantity') or 0):.4f}",
+                    f"{float(p.get('average_price') or 0):.4f}",
+                    f"{float(p.get('last_price') or 0):.4f}",
+                    f"{float(p.get('market_value') or 0):.4f}",
+                    f"{float(p.get('yield_value') or 0):.4f}",
+                    f"{float(p.get('historical_variation_percentage') or 0):.4f}",
+                ],
+            },
+        }
+
+        spec = SPECS.get(kind)
+        if spec is None:
+            self._json(400, {"status": "bad_request", "detail": f"unknown kind: {kind}"})
+            return
+
+        buf = io.StringIO()
+        writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(spec["columns"])
+
+        path = DATA_DIR / spec["file"]
+        if path.is_file():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                data = None
+
+            if data is not None:
+                if spec["list_key"]:
+                    items = data.get(spec["list_key"]) or []
+                else:
+                    # Positions: {accountId: {name: ..., positions: [...]}, ...}
+                    # Flatten + attach _account_name for the CSV row.
+                    items = []
+                    accounts_map = data.get("accounts") or {}
+                    for acc_id, acc in (accounts_map.items() if isinstance(accounts_map, dict) else []):
+                        acc_name = acc.get("name") if isinstance(acc, dict) else ""
+                        for pos in (acc.get("positions") or []) if isinstance(acc, dict) else []:
+                            pos = dict(pos)
+                            pos["_account_name"] = acc_name
+                            items.append(pos)
+                    # Fallback shape: flat list under "positions"
+                    if not items and isinstance(data.get("positions"), list):
+                        items = data["positions"]
+                for item in items:
+                    try:
+                        writer.writerow(spec["row"](item))
+                    except (TypeError, ValueError):
+                        continue
+
+        body = buf.getvalue().encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="gbm-{kind}.csv"')
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

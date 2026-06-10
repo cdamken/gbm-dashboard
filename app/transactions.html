@@ -237,6 +237,9 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <input type="checkbox" id="show-noise" onchange="render()">
     Mostrar ruido del sistema (sweep GBMF2, reportos, traspasos internos)
   </label>
+  <a href="/export/transacciones.csv" download="gbm-transacciones.csv"
+     style="background: rgba(96,165,250,0.08); color: var(--blue); text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; border: 1px solid var(--blue); white-space: nowrap;"
+     title="Descarga el libro diario como CSV (fecha, ticker, descripción, monto, categoría, cuenta)">↓ Exportar CSV</a>
 </div>
 
 <div id="noise-banner" class="noise-banner"></div>
