@@ -22,7 +22,7 @@ import getpass
 import json
 import os
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -188,7 +188,11 @@ def read_last_update_date(data_dir: Path) -> date | None:
         return None
     try:
         first_line = path.read_text(encoding="utf-8").strip().splitlines()[0]
-        return date.fromisoformat(first_line.split()[0])
+        # Accept legacy "2026-06-10 09:21:43" AND new ISO
+        # "2026-06-10T09:21:43Z" — only the YYYY-MM-DD prefix matters
+        # for the incremental window calculation.
+        date_part = first_line.split('T')[0].split()[0]
+        return date.fromisoformat(date_part)
     except (OSError, ValueError, IndexError):
         return None
 
@@ -666,8 +670,12 @@ def main() -> None:
                     )
                 write_json(DATA_DIR / "transactions.json", tx_file_payload)
 
+            # ISO 8601 UTC with explicit Z — browser JS parses the `Z`
+            # and converts to user-local via toLocaleTimeString(). Fixes
+            # the "Updated 07:21 AM" stale chip on a UTC server.
             (DATA_DIR / "last_update.date").write_text(
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S\n"), encoding="utf-8"
+                datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ\n"),
+                encoding="utf-8",
             )
 
     except AuthError as e:
