@@ -26,8 +26,10 @@ data-shaping change should land here first. The ownCloud port
 forced multi-user patches (per-user paths, CSP, ICrypto-encrypted
 credentials).
 
-The orchestrator lives in `~/damkencloud/Claude/GBM-Master/` — its
-`docs/WORKFLOW.md` is the canonical cross-repo flow.
+The orchestrator lives in `~/damkencloud/Claude/Portfolio-Master/` —
+its `WORKFLOW.md` is the canonical cross-repo flow and `TRIO-PLAYBOOK.md`
+documents the shared 3-part structure across all trios. (Renamed from
+the old per-trio `GBM-Master` on 2026-06-11.)
 
 ## Workflow rule
 
