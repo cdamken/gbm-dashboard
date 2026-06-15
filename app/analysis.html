@@ -139,6 +139,34 @@ body {
 
 <div id="error-box"></div>
 
+<!-- ---------- Capital y resultados ---------- -->
+<div class="section">
+  <span>Capital y resultados</span>
+  <span class="badge muted">sobre el historial disponible</span>
+</div>
+<div class="stat-row" id="capital-stats">
+  <div>
+    <div class="stat-label">Capital neto comprometido</div>
+    <div class="stat-value" id="cap-net">—</div>
+    <div class="stat-detail">depósitos − retiros</div>
+  </div>
+  <div>
+    <div class="stat-label">P&amp;L de por vida</div>
+    <div class="stat-value" id="cap-pnl">—</div>
+    <div class="stat-detail" id="cap-pnl-detail">valor actual − capital neto</div>
+  </div>
+  <div>
+    <div class="stat-label">Compras totales</div>
+    <div class="stat-value" id="cap-buys">—</div>
+    <div class="stat-detail" id="cap-buys-detail">—</div>
+  </div>
+  <div>
+    <div class="stat-label">Ventas totales</div>
+    <div class="stat-value" id="cap-sells">—</div>
+    <div class="stat-detail" id="cap-sells-detail">—</div>
+  </div>
+</div>
+
 <!-- ---------- Composición por mercado ---------- -->
 <div class="section">
   <span>Composición del portafolio</span>
@@ -277,6 +305,7 @@ async function load() {
     }
 
     renderHeader();
+    renderCapitalStats();
     renderAllocationChart();
     renderNetWorthChart();
   } catch (err) {
@@ -300,6 +329,47 @@ function renderHeader() {
       : "Datos frescos.";
     chip.title = `${formatTimestamp(state.lastUpdate)}\n${hint}`;
   }
+}
+
+// ----------------------------------------------------------------------
+// Capital & results KPIs — parity with the TR/SC analytics cockpits.
+//   Net capital committed = deposits − withdrawals
+//   Lifetime P&L          = current market value − net capital
+//   Total purchases/sales = Σ is_buy / Σ is_sell (real trades; the GBMF2/
+//                           GBMDINT money-market sweeps and repos are
+//                           excluded, same as the cost-basis line).
+// ----------------------------------------------------------------------
+function renderCapitalStats() {
+  const rows = state.transactions?.transactions || [];
+  let deposits = 0, withdrawals = 0, buys = 0, sells = 0, buyCount = 0, sellCount = 0;
+  for (const t of rows) {
+    const cat = t.category;
+    const amt = Math.abs(Number(t.amount) || 0);
+    if (cat === "deposit")    { deposits += amt; continue; }
+    if (cat === "withdrawal") { withdrawals += amt; continue; }
+    if (cat === "repo_buy" || cat === "repo_mature") continue;
+    if (t.security_id === "GBMF2 BF" || t.security_id === "GBMDINT BO") continue;
+    if (t.is_buy)       { buys += amt; buyCount++; }
+    else if (t.is_sell) { sells += amt; sellCount++; }
+  }
+  const netCapital = deposits - withdrawals;
+  const currentValue = (state.positionsFlat || [])
+    .reduce((s, p) => s + (Number(p.market_value) || 0), 0);
+  const pnl = currentValue - netCapital;
+  const m0 = (v) => fmtMoney(v, { currency: true, decimals: 0 });
+
+  document.getElementById("cap-net").textContent = m0(netCapital);
+  const pnlEl = document.getElementById("cap-pnl");
+  pnlEl.textContent = (pnl >= 0 ? "+" : "−") + m0(Math.abs(pnl));
+  pnlEl.className = "stat-value " + (pnl >= 0 ? "green" : "red");
+  document.getElementById("cap-pnl-detail").textContent =
+    `valor actual ${m0(currentValue)} − capital ${m0(netCapital)}`;
+  document.getElementById("cap-buys").textContent = m0(buys);
+  document.getElementById("cap-buys-detail").textContent =
+    `${buyCount} ${buyCount === 1 ? "orden" : "órdenes"} de compra`;
+  document.getElementById("cap-sells").textContent = m0(sells);
+  document.getElementById("cap-sells-detail").textContent =
+    `${sellCount} ${sellCount === 1 ? "orden" : "órdenes"} de venta`;
 }
 
 // ----------------------------------------------------------------------
