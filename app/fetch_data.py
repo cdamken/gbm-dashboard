@@ -400,8 +400,16 @@ def main() -> None:
             # places. We iterate them all and tag each order with its
             # account so the dashboard can filter / group.
             # ----------------------------------------------------------
+            # Include Trading USA (template "trading_usa") alongside the
+            # Mexican "trading" accounts — its orders come from the same
+            # GetBlotterOrders endpoint. The "== 'trading'" filter silently
+            # dropped Trading USA, so USA buys/sells (e.g. a partial sell)
+            # never showed in Movimientos even though MX ones did. The
+            # per-account call is wrapped in try/except, so if GBM rejects
+            # the USA account it's logged and skipped rather than fatal.
             trading_accounts = [
-                a for a in accounts if a.management_type_template == "trading"
+                a for a in accounts
+                if a.management_type_template in ("trading", "trading_usa")
             ]
             if trading_accounts:
                 to_date_ = date.today()
