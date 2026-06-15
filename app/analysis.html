@@ -666,8 +666,21 @@ function renderNetWorthChart() {
     // (extremely rare given carry-forward in _replayBenchmark) yield null.
     return filteredDates.map(d => m[d] ?? null);
   };
-  const naftracValues = alignBench(naftracMap);
-  const sp500Values = alignBench(sp500Map);
+  // Rebase each benchmark so it STARTS at the same height as the user's
+  // line at the left edge of the visible window — otherwise an index that
+  // had already run up before the window appears to "start higher" and the
+  // comparison is unfair. Subtract the pre-window head-start (constant
+  // offset). No-op in the "All" view (both already start at the first buy).
+  const rebaseToStart = (series) => {
+    if (!series) return series;
+    let i = 0;
+    while (i < series.length && (series[i] == null || values[i] == null)) i++;
+    if (i >= series.length) return series;
+    const offset = series[i] - values[i];
+    return series.map(v => v == null ? null : +(v - offset).toFixed(2));
+  };
+  const naftracValues = rebaseToStart(alignBench(naftracMap));
+  const sp500Values = rebaseToStart(alignBench(sp500Map));
 
   const datasets = [
     {
