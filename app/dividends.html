@@ -169,6 +169,28 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <div class="value" id="num-issuers">—</div>
     <div class="delta" id="num-events">—</div>
   </div>
+  <div class="card">
+    <div class="label">Proyección próximos 12m</div>
+    <div class="value green" id="div-forecast">—</div>
+    <div class="delta" id="div-forecast-detail">—</div>
+  </div>
+  <div class="card" title="Rendimiento por dividendos sobre el costo: proyección 12m ÷ costo invertido. A diferencia del yield de mercado (÷ precio actual), te dice cuánto ingreso generas por cada peso que pagaste.">
+    <div class="label">Yield on cost</div>
+    <div class="value" id="div-yoc" style="color: var(--blue);">—</div>
+    <div class="delta">proyección 12m ÷ costo invertido</div>
+  </div>
+</div>
+
+<!-- ---------- monthly dividends chart (net recibido vs ISR) ---------- -->
+<div class="section">
+  <span>Dividendos por mes</span>
+  <span class="badge" id="div-badge">últimos 12 meses</span>
+</div>
+<div style="background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-bottom: 24px;">
+  <div style="position:relative; height:280px;"><canvas id="dividends-chart"></canvas></div>
+  <div id="dividends-empty" style="display:none; color: var(--muted); padding: 40px; text-align:center;">
+    Sin dividendos en los últimos 12 meses.
+  </div>
 </div>
 
 <!-- ---------- filters ---------- -->
@@ -224,6 +246,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
   fiscales distribuidos y las retenciones de ISR cedular correspondientes.
 </div>
 
+<script src="/app/vendor/chart.umd.min.js"></script>
 <script src="/app/_shared.js"></script>
 <script>
 // Classify a row into payout vs tax vs other.
@@ -237,14 +260,25 @@ function classify(d) {
   return "other";
 }
 
+// Position sections we sum for the cost basis behind "yield on cost".
+const INVEST_SECTIONS = [
+  "mercados_globales_sic",
+  "mercado_capitales",
+  "sociedades_inversion_deuda",
+  "sociedades_inversion_comun",
+  "mercado_extranjero",
+];
+
 let state = {
   rows: [],
   accounts: [],
+  positionsByAccount: {},
   fromDate: null,
   toDate: null,
   sortKey: "process_date",
   sortDir: "desc",
 };
+let _divChart = null;
 
 async function load() {
   try {
@@ -253,8 +287,9 @@ async function load() {
       fetch(url, opts).then(r => (r.ok ? r.json() : null)).catch(() => null);
     const safeText = (url) =>
       fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
-    const [data, lastUpdate] = await Promise.all([
+    const [data, positionsByAccount, lastUpdate] = await Promise.all([
       safeJson("/DATA/dividends.json"),
+      safeJson("/DATA/positions.json"),
       safeText("/DATA/last_update.date"),
     ]);
     if (!data) {
@@ -266,6 +301,7 @@ async function load() {
       return;
     }
     state.rows = data.dividends || [];
+    state.positionsByAccount = positionsByAccount || {};
     state.fromDate = data.from_date;
     state.toDate = data.to_date;
 
@@ -275,6 +311,8 @@ async function load() {
 
     populateFilters();
     renderCards();
+    renderDividendForecast();
+    renderDividendsChart();
     renderTable();
   } catch (err) {
     document.getElementById("error-box").innerHTML =
@@ -329,6 +367,132 @@ function renderCards() {
   document.getElementById("num-issuers").textContent = issuers;
   document.getElementById("num-events").textContent =
     `${state.rows.length} movimiento(s) en total`;
+}
+
+// Forward 12-month dividend projection + yield on cost. Ports the TR/GBM
+// analytics algorithm: scale the observed payouts to a 365-day window
+// (needs ≥90 days of history), then divide by cost basis (avg_price × qty
+// across all positions) for yield on cost. Lives here now — dividendos en
+// la página de Dividendos.
+function renderDividendForecast() {
+  const payouts = (state.rows || []).filter(r => !r.is_withholding);
+  const forecastEl = document.getElementById("div-forecast");
+  const detailEl = document.getElementById("div-forecast-detail");
+  const yocEl = document.getElementById("div-yoc");
+  const reset = (msg) => {
+    forecastEl.textContent = "—"; forecastEl.className = "value muted";
+    detailEl.textContent = msg; if (yocEl) yocEl.textContent = "—";
+  };
+  if (!payouts.length) return reset("sin dividendos en historial");
+  const dates = payouts.map(r => new Date(r.process_date))
+    .filter(d => !isNaN(d.getTime())).sort((a, b) => a - b);
+  if (!dates.length) return reset("fechas inválidas");
+  const spanDays = Math.max(1, Math.floor((dates[dates.length - 1] - dates[0]) / 86400000));
+  if (spanDays < 90) return reset(`solo ${spanDays}d de historial (necesita ≥90d)`);
+  const totalAll = payouts.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const scaled = spanDays < 365 ? totalAll * (365 / spanDays) : totalAll;
+  forecastEl.textContent = fmtMoney(scaled, { currency: true, decimals: 0 });
+  forecastEl.className = "value green";
+  detailEl.textContent = `proyectado de ${payouts.length} pagos en ${spanDays}d`;
+  if (yocEl) {
+    let costBasis = 0;
+    for (const acct of Object.values(state.positionsByAccount || {})) {
+      for (const key of INVEST_SECTIONS) {
+        for (const p of (acct[key] || [])) {
+          if (p.issue_id === "Subtotal") continue;
+          costBasis += (Number(p.average_price) || 0) * (Number(p.quantity) || 0);
+        }
+      }
+    }
+    yocEl.textContent = costBasis > 0 ? (scaled / costBasis * 100).toFixed(2) + "%" : "—";
+  }
+}
+
+// Monthly dividends bar chart — net payout (kept) vs ISR (withheld),
+// stacked. Ported verbatim from the old Análisis page (uses state.rows).
+function renderDividendsChart() {
+  if (typeof window.Chart !== "function") return;
+  const canvas = document.getElementById("dividends-chart");
+  const emptyEl = document.getElementById("dividends-empty");
+  if (!canvas) return;
+
+  const rows = state.rows || [];
+  if (rows.length === 0) {
+    if (_divChart) { _divChart.destroy(); _divChart = null; }
+    canvas.style.display = "none";
+    emptyEl.style.display = "block";
+    return;
+  }
+
+  const now = new Date();
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    months.push({ key, label: monthLabel(key) });
+  }
+  const payoutByMonth = {};
+  const taxByMonth = {};
+  const countByMonth = {};
+  for (const row of rows) {
+    const k = (row.process_date || "").slice(0, 7);
+    if (!k) continue;
+    const amt = Number(row.amount) || 0;
+    if (row.is_withholding) taxByMonth[k] = (taxByMonth[k] || 0) + amt;
+    else payoutByMonth[k] = (payoutByMonth[k] || 0) + amt;
+    countByMonth[k] = (countByMonth[k] || 0) + 1;
+  }
+
+  const labels = months.map(m => m.label);
+  const payouts = months.map(m => payoutByMonth[m.key] || 0);
+  const taxes   = months.map(m => taxByMonth[m.key] || 0);
+
+  const totalNet = payouts.reduce((s, v) => s + v, 0);
+  const totalTax = taxes.reduce((s, v) => s + v, 0);
+  document.getElementById("div-badge").textContent =
+    `${fmtMoney(totalNet, { currency: true, decimals: 0 })} neto · ${fmtMoney(totalTax, { currency: true, decimals: 0 })} ISR · últimos 12 meses`;
+
+  canvas.style.display = "";
+  emptyEl.style.display = "none";
+
+  if (_divChart) _divChart.destroy();
+  _divChart = new window.Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        { label: "Neto recibido", data: payouts,
+          backgroundColor: "rgba(74, 222, 128, 0.75)", borderColor: "#4ade80", borderWidth: 1, stack: "div" },
+        { label: "ISR retenido", data: taxes,
+          backgroundColor: "rgba(248, 113, 113, 0.75)", borderColor: "#f87171", borderWidth: 1, stack: "div" },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      animation: { duration: 600, easing: "easeOutQuart" },
+      scales: {
+        x: { stacked: true, ticks: { color: "#7a8599", font: { size: 11 } }, grid: { display: false } },
+        y: { stacked: true, ticks: { color: "#7a8599", callback: (v) => fmtMoney(v, { currency: true, decimals: 0 }), font: { size: 11 } }, grid: { color: "rgba(42, 49, 66, 0.5)" } },
+      },
+      plugins: {
+        legend: { position: "top", align: "end",
+          labels: { color: "#e8eef5", font: { size: 12, weight: "600" }, usePointStyle: true, pointStyle: "rect", boxWidth: 10, boxHeight: 10, padding: 12 } },
+        tooltip: {
+          backgroundColor: "#0f1419", titleColor: "#e8eef5", bodyColor: "#e8eef5",
+          borderColor: "#2a3142", borderWidth: 1, padding: 10,
+          callbacks: {
+            label: (ctx) => ` ${ctx.dataset.label}: ${fmtMoney(ctx.parsed.y, { currency: true, decimals: 2 })}`,
+            footer: (items) => {
+              if (!items.length) return "";
+              const k = months[items[0].dataIndex].key;
+              const count = countByMonth[k];
+              return count ? `\n${count} movimiento${count === 1 ? "" : "s"}` : "";
+            },
+          },
+        },
+      },
+    },
+  });
 }
 
 function setSort(key) {
