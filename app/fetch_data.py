@@ -97,9 +97,26 @@ def get_client(totp_code: str | None, non_interactive: bool) -> GbmClient:
     # we're here), and that latency can push complete_mfa() past the code's
     # 30-second TOTP window → a spurious "invalid or expired TOTP code".
     if totp_code is None:
-        client = GbmClient.from_saved()
-        if client is not None:
-            return client
+        # GBM's access-token TTL is far shorter than the 3600s we store, and
+        # it can be revoked early (e.g. logging into the GBM app on your
+        # phone), so it 401s a token we still consider "valid" by the local
+        # clock. from_saved() only refreshes when is_expired is True, so that
+        # case slips through → 401 → wipe → re-TOTP loop. Fix: on every run,
+        # proactively mint a fresh access token from the long-lived
+        # refresh_token. Only fall back to the TOTP prompt if the refresh
+        # token itself is revoked.
+        from gbm_mx_api.auth.refresh import refresh_session
+        from gbm_mx_api.auth.session import Session
+        sess = Session.try_load()
+        if sess is not None and sess.refresh_token:
+            try:
+                sess = refresh_session(sess)
+                sess.save()
+                return GbmClient.from_session(sess)
+            except (AuthError, ApiError, TransportError):
+                pass  # refresh token revoked / Cognito down → need fresh MFA
+        if sess is not None and not sess.is_expired:
+            return GbmClient.from_session(sess)
         if non_interactive:
             # The dashboard's first POST /update with no TOTP — tell the
             # browser to show its MFA modal.
