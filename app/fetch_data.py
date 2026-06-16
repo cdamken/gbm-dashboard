@@ -426,7 +426,7 @@ def main() -> None:
                     # timeout and got SIGKILL'd mid-fetch. 365 days covers a
                     # young account with margin; bump GBM_ORDERS_DAYS for an
                     # older one.
-                    days_back = int(os.environ.get("GBM_ORDERS_DAYS", "365"))
+                    days_back = int(os.environ.get("GBM_ORDERS_DAYS", "200"))
                     from_date_ = to_date_ - timedelta(days=days_back)
                 print(
                     f"  fetching orders {from_date_} → {to_date_} "
