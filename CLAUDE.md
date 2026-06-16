@@ -112,7 +112,17 @@ todas las requests (anti-fraude).
 | Personal (Trading MX) | ✓ | ✓ `GetBlotterOrders` | ✓ | ✓ `GetCashHistoricalMovements` |
 | Asesor | ✓ | ❌ (Personal-only) | ✓ | ✓ |
 | Smart Cash | ✓ | ❌ | ✓ | ✓ |
-| Trading USA | ✓ | ❌ (gap) | — | — |
+| Trading USA (`trading_usa`) | ✓ | **0** (confirmado) | **0** | **0** |
+
+> **Trading USA (EP47NC03) = SOLO posiciones.** Desde 2026-06-16 SÍ la
+> consultamos para órdenes/libro (antes el filtro `== "trading"` la excluía),
+> pero **GBM devuelve 0** en `GetBlotterOrders` y `GetCashHistoricalMovements`.
+> Solo entrega el snapshot de posición (sección `mercado_extranjero`, ej. DRAM),
+> reportado **en pesos** (la UI muestra `(≈ $USD)` con `fx.json`). El snapshot
+> refleja lo **liquidado** (US T+1/T+2). **No confundir** con las acciones US
+> vía **SIC** (`mercados_globales_sic`), que viven en **Personal** y SÍ aparecen
+> en Órdenes/Libro. Detalle: ADR `2026-06-16 — GBM — Modelo de datos por
+> cuenta` en Portfolio-Master/DECISIONS.md.
 
 `transac_type` viene de la API pero **se ignora** excepto para
 `dividend`. La categorización real se hace en el dashboard usando el
