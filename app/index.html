@@ -775,15 +775,21 @@ function renderAll() {
 // surface a banner so the user notices the lopsided allocation. Aggregates
 // across accounts — a ticker held in Personal + Asesor counts as ONE
 // position (otherwise an asset shown twice could trick the heuristic).
-// Pure-cash positions (efectivo) are excluded — concentration of cash is
-// not "single-stock risk".
+//
+// Cash (efectivo) is never a *candidate* top holding — concentration of cash
+// is not "single-stock risk". BUT cash MUST count in the denominator: the
+// banner says "% del portafolio", so a holding's share is measured against
+// EVERYTHING the user owns. Otherwise a small position sitting in an account
+// that's mostly idle cash (e.g. ~$9k of unused dollars in Trading USA) looks
+// like it dominates the portfolio (it was showing 51.8% when it's a fraction
+// of the real total).
 function computeConcentration() {
   const flat = state.positionsFlat.filter(
     p => p._market_key !== "efectivo" && p.issue_id !== "Subtotal"
   );
   if (flat.length === 0) return null;
 
-  // Aggregate market_value by issue_id across accounts.
+  // Aggregate market_value by issue_id across accounts (non-cash holdings).
   const byIssue = {};
   for (const p of flat) {
     const v = Number(p.market_value) || 0;
@@ -791,8 +797,13 @@ function computeConcentration() {
     byIssue[p.issue_id] = (byIssue[p.issue_id] || 0) + v;
   }
   const entries = Object.entries(byIssue).sort((a, b) => b[1] - a[1]);
-  const total = entries.reduce((s, [, v]) => s + v, 0);
-  if (total <= 0 || entries.length === 0) return null;
+  if (entries.length === 0) return null;
+
+  // Denominator = TOTAL portfolio value, INCLUDING cash and every account
+  // (accountValue() sums positions + efectivo, falling back to the account's
+  // own position.amount). This is what "del portafolio" must mean.
+  const total = state.accounts.reduce((s, a) => s + accountValue(a), 0);
+  if (total <= 0) return null;
 
   const [topTicker, topValue] = entries[0];
   const topShare = topValue / total;
