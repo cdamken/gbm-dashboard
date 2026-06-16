@@ -81,6 +81,29 @@ def make_fixed_totp_provider(code: str):
     return _provider
 
 
+def fetch_usdmxn_rate():
+    """Latest USD/MXN spot (pesos per 1 USD) from Yahoo, or None.
+
+    GBM reports Trading USA in pesos with no FX field, so we fetch a live
+    rate to show the USD equivalent. Server-side (no CORS); best-effort.
+    """
+    import urllib.error
+    import urllib.request
+    url = ("https://query1.finance.yahoo.com/v8/finance/chart/MXN=X"
+           "?interval=1d&range=5d")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            payload = json.loads(r.read())
+        result = (payload.get("chart") or {}).get("result") or [{}]
+        quote = ((result[0].get("indicators") or {}).get("quote") or [{}])[0]
+        closes = [c for c in (quote.get("close") or []) if c]
+        return round(float(closes[-1]), 4) if closes else None
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError,
+            ValueError, KeyError, IndexError):
+        return None
+
+
 def get_client(totp_code: str | None, non_interactive: bool) -> GbmClient:
     """Return a usable GbmClient or exit with a specific code.
 
@@ -409,6 +432,15 @@ def main() -> None:
                     positions_by_account[a.legacy_contract_id] = None
 
             write_json(DATA_DIR / "positions.json", positions_by_account)
+
+            # USD/MXN rate so the UI can show Trading USA values (GBM reports
+            # them in pesos) alongside their USD equivalent. Non-fatal.
+            rate = fetch_usdmxn_rate()
+            if rate:
+                write_json(DATA_DIR / "fx.json", {
+                    "usdmxn": rate,
+                    "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                })
 
             # ----------------------------------------------------------
             # Orders (filled) for EVERY trading account (BMV). A user may

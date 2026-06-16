@@ -445,6 +445,14 @@ const INVEST_SECTIONS = [
 // ----------------------------------------------------------------------
 // State
 // ----------------------------------------------------------------------
+let usdMxnRate = null;  // pesos per 1 USD, for the Trading USA "(≈ $USD)" hint
+// Trading USA positions arrive from GBM's API in pesos (no USD field); show
+// the ≈ USD equivalent next to the peso value, the way GBM's own app does.
+function usdHint(p) {
+  if (!p || p._market_key !== "mercado_extranjero" || !usdMxnRate) return "";
+  const usd = (Number(p.market_value) || 0) / usdMxnRate;
+  return ` <span style="color: var(--muted); font-size: 11px;">(≈ $${usd.toLocaleString("en-US", { maximumFractionDigits: 0 })} USD)</span>`;
+}
 let state = {
   accounts: [],
   positionsByAccount: {},   // { "EP47NC05": {...} | null }
@@ -473,13 +481,15 @@ async function load() {
     const safeText = (url) =>
       fetch(url, opts).then(r => (r.ok ? r.text() : "")).catch(() => "");
 
-    const [accounts, positionsByAccount, investmentsGroups, transactions, lastUpdate] = await Promise.all([
+    const [accounts, positionsByAccount, investmentsGroups, transactions, fx, lastUpdate] = await Promise.all([
       safeJson("/DATA/accounts.json"),
       safeJson("/DATA/positions.json"),
       safeJson("/DATA/investments_groups.json"),
       safeJson("/DATA/transactions.json"),
+      safeJson("/DATA/fx.json"),
       safeText("/DATA/last_update.date"),
     ]);
+    usdMxnRate = fx && Number(fx.usdmxn) > 0 ? Number(fx.usdmxn) : null;
 
     if (!accounts) {
       // No data yet — typical on first run or right after switching
@@ -1132,7 +1142,7 @@ function renderTable() {
       <td class="num">${fmtMoney(p.quantity, { decimals: qtyDecimals })}</td>
       <td class="num">${fmtMoney(p.average_price)}</td>
       <td class="num">${fmtMoney(p.last_price)}</td>
-      <td class="num">${fmtMoney(p.market_value)}</td>
+      <td class="num">${fmtMoney(p.market_value)}${usdHint(p)}</td>
       <td class="num ${pnlClass(p.yield_value)}">
         ${fmtMoney(p.yield_value, { sign: true })}
       </td>
