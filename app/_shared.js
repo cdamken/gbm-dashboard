@@ -25,6 +25,12 @@ const MONTH_NAMES = [
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
 
+// HTML-escape a value before interpolating it into an innerHTML string.
+// Broker-supplied fields (names, tickers, ISINs, descriptions, ids…) must
+// pass through this to prevent self-XSS. Numbers we format ourselves and
+// static literal markup do NOT need it. Global (like every other helper).
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
 // Format a number as Mexican currency.
 //   currency: true       → prepend "$"
 //   sign:     true       → prepend "+" for positives (negatives always get "-")

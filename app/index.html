@@ -831,7 +831,7 @@ function renderConcentrationWarning() {
   const tickerLabel = c.topTicker;
   let headline;
   if (c.topShare > 0.30) {
-    headline = `<b>Concentración alta:</b> ${tickerLabel} es ${pct(c.topShare)} del portafolio`;
+    headline = `<b>Concentración alta:</b> ${esc(tickerLabel)} es ${pct(c.topShare)} del portafolio`;
     if (c.top5Share > 0.70) {
       headline += `. Top 5 emisoras = ${pct(c.top5Share)}`;
     }
@@ -959,9 +959,9 @@ function renderAccounts() {
     ).length;
     return `<div class="account-chip">
       ${posCount > 0 ? `<span class="acc-detail-flag">${posCount} pos.</span>` : ''}
-      <div class="acc-type ${type.color}">${type.label}</div>
-      <div class="acc-name">${a.name || "—"}</div>
-      <div class="acc-id">${a.legacy_contract_id}</div>
+      <div class="acc-type ${type.color}">${esc(type.label)}</div>
+      <div class="acc-name">${esc(a.name || "—")}</div>
+      <div class="acc-id">${esc(a.legacy_contract_id)}</div>
       <div class="acc-value">${fmtMoney(value, { currency: true })}</div>
       <div class="acc-pnl ${pnlClass(pnl)}">
         ${pnl != null ? fmtMoney(pnl, { sign: true, currency: true }) : "—"}
@@ -1031,11 +1031,11 @@ function positionMoverRow(p) {
   // When a ticker is held in more than one account we show them as a
   // subtitle under the ticker so it's clear the row aggregates them.
   const subtitle = (p.account_list && p.accounts && p.accounts.size > 1)
-    ? `<div style="color: var(--muted); font-size: 10px; font-weight: 400;">${p.account_list}</div>`
+    ? `<div style="color: var(--muted); font-size: 10px; font-weight: 400;">${esc(p.account_list)}</div>`
     : "";
   const qtyDecimals = (p.quantity % 1 === 0) ? 0 : 4;
   return `<tr>
-    <td class="ticker">${p.issue_id}${subtitle}</td>
+    <td class="ticker">${esc(p.issue_id)}${subtitle}</td>
     <td class="num">${fmtMoney(p.quantity, { decimals: qtyDecimals })}</td>
     <td class="num ${pnlClass(pct)}">${fmtPct(pct)}</td>
     <td class="num ${pnlClass(p.yield_value)}">${fmtMoney(p.yield_value, { sign: true })}</td>
@@ -1138,14 +1138,14 @@ function renderTable() {
     // Account column: name if held in one account, "N cuentas" with detail
     // tooltip if held in several.
     const accountCell = p._account_count > 1
-      ? `<span title="${p._account_list}">${p._account_count} cuentas</span>
-         <div style="color: var(--muted); font-size: 10px;">${p._account_list}</div>`
-      : (p._account_list || "—");
+      ? `<span title="${esc(p._account_list)}">${p._account_count} cuentas</span>
+         <div style="color: var(--muted); font-size: 10px;">${esc(p._account_list)}</div>`
+      : esc(p._account_list || "—");
     return `<tr>
       <td class="ticker">
-        <span class="ticker-link" onclick="openPositionModal('${p.issue_id.replace(/'/g, "\\'")}')">${p.issue_id}</span>
+        <span class="ticker-link" onclick="openPositionModal('${p.issue_id.replace(/'/g, "\\'")}')">${esc(p.issue_id)}</span>
         <div style="color: var(--muted); font-size: 11px; font-weight: 400;">
-          ${p.issue_name || ""}
+          ${esc(p.issue_name || "")}
         </div>
       </td>
       <td><span class="market-pill ${m.cls}">${m.label}</span></td>
@@ -1233,7 +1233,7 @@ function openPositionModal(issueId) {
     </div>
     <div class="pm-meta">
       Mercado: <span class="market-pill ${market.cls}">${market.label}</span>
-      · Cuentas: <code>${[...agg.accounts].sort().join(", ") || "—"}</code>
+      · Cuentas: <code>${esc([...agg.accounts].sort().join(", ") || "—")}</code>
     </div>
     <div class="pm-meta" style="font-size: 12px; margin-top: 16px;">
       Los links abren en una pestaña nueva. No podemos embedder páginas
@@ -1273,7 +1273,7 @@ function openPositionModal(issueId) {
     );
   }
   document.getElementById("pm-links").innerHTML = links
-    .map(([label, url]) => `<a href="${url}" target="_blank" rel="noopener">${label} ↗</a>`)
+    .map(([label, url]) => `<a href="${esc(url)}" target="_blank" rel="noopener">${label} ↗</a>`)
     .join("");
 
   document.getElementById("pos-modal").classList.add("open");

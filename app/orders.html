@@ -498,7 +498,7 @@ function renderTickers() {
       : r.count;
     const qtyDec = (r.qty % 1 === 0) ? 0 : 4;
     return `<tr>
-      <td class="ticker">${r.issue_id}${usaNote}</td>
+      <td class="ticker">${esc(r.issue_id)}${usaNote}</td>
       <td class="num">${countCell}</td>
       <td class="num">${fmtMoney(r.qty, { decimals: qtyDec })}</td>
       <td class="num">${fmtMoney(r.amount, { currency: true })}</td>
@@ -564,7 +564,7 @@ function renderTable() {
                      : o.is_cancelled ? "Cancelada"
                      : (o.status_label || `Estado ${o.status}`);
     const cancelNote = (o.cancel_message && o.is_cancelled)
-      ? `<div class="muted" style="font-size: 10px;">${o.cancel_message}</div>` : "";
+      ? `<div class="muted" style="font-size: 10px;">${esc(o.cancel_message)}</div>` : "";
     // For non-filled orders, quantity = original_quantity and price = limit_price,
     // and amount is the intended notional rather than the executed one.
     const qty = o.is_filled ? o.quantity : (o.original_quantity ?? o.quantity);
@@ -574,17 +574,17 @@ function renderTable() {
       <td>${formatDate(o.processed_at)}
         <div class="muted" style="font-size: 11px;">${formatTime(o.processed_at)}</div>
       </td>
-      <td class="ticker">${o.issue_id}
+      <td class="ticker">${esc(o.issue_id)}
         ${market ? `<span class="market-pill ${market.cls}" style="margin-left: 8px;">${market.label}</span>` : ""}
       </td>
-      <td style="color: var(--muted); font-size: 12px;">${o.account_name || "—"}</td>
+      <td style="color: var(--muted); font-size: 12px;">${esc(o.account_name || "—")}</td>
       <td><span class="side-pill ${sideClass}">${sideLabel}</span></td>
-      <td><span class="status-pill ${pillCls}">${statusText}</span>${cancelNote}</td>
+      <td><span class="status-pill ${pillCls}">${esc(statusText)}</span>${cancelNote}</td>
       <td class="num">${fmtMoney(qty, { decimals: qty % 1 === 0 ? 0 : 4 })}</td>
       <td class="num">${fmtMoney(price)}</td>
       <td class="num">${o.is_filled ? fmtMoney(amount, { currency: true }) : "—"}</td>
       <td class="num">${fmtMoney(o.commission)}</td>
-      <td class="sob-id">${o.sob_id}</td>
+      <td class="sob-id">${esc(o.sob_id)}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="10" class="empty">Sin órdenes que coincidan con los filtros</td></tr>`;
 }

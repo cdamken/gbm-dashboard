@@ -540,16 +540,16 @@ function renderTable() {
   document.getElementById("dividends-tbody").innerHTML = rows.map(d => {
     const desc = d.description || "—";
     const security = d.security_name && d.security_name.length > 0
-      ? `<div class="muted" style="font-size: 11px;">${d.security_name}</div>` : "";
+      ? `<div class="muted" style="font-size: 11px;">${esc(d.security_name)}</div>` : "";
     return `<tr>
       <td>${formatDate(d.process_date)}</td>
-      <td class="ticker">${d.security_id}${security}</td>
-      <td style="font-size: 12px;">${desc}</td>
-      <td style="color: var(--muted); font-size: 12px;">${d.account_name || "—"}</td>
+      <td class="ticker">${esc(d.security_id)}${security}</td>
+      <td style="font-size: 12px;">${esc(desc)}</td>
+      <td style="color: var(--muted); font-size: 12px;">${esc(d.account_name || "—")}</td>
       <td>${kindPill(d)}</td>
       <td class="num">${fmtMoney(d.amount, { currency: true })}</td>
       <td class="num">${fmtMoney(d.net_amount, { currency: true })}</td>
-      <td class="tx-id">${d.transaction_id}</td>
+      <td class="tx-id">${esc(d.transaction_id)}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="8" class="empty">Sin movimientos que coincidan con los filtros</td></tr>`;
 }
