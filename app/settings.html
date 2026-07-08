@@ -326,7 +326,7 @@ async function loadSessionInfo() {
     const r = await fetch("/config", { cache: "no-store" });
     const c = await r.json();
     ul.innerHTML = c.configured
-      ? `<li><span class="label">Credenciales</span><span class="value green">guardadas (${c.email})</span></li>
+      ? `<li><span class="label">Credenciales</span><span class="value green">guardadas (${esc(c.email)})</span></li>
          <li><span class="label">TOTP</span><span class="value muted">solo cuando expire el refresh token (~30 días)</span></li>`
       : `<li><span class="label">Credenciales</span><span class="value red">sin configurar</span></li>`;
   } catch (_) {

@@ -311,7 +311,7 @@ function isNoise(t) {
 
 function categoryPill(t) {
   const c = t.category || "other";
-  return `<span class="cat-pill cat-${c}">${categoryLabel(c)}</span>`;
+  return `<span class="cat-pill cat-${esc(c)}">${esc(categoryLabel(c))}</span>`;
 }
 
 let state = {
@@ -465,16 +465,16 @@ function render() {
   document.getElementById("tx-tbody").innerHTML = rows.map(t => {
     const desc = t.description || "—";
     const security = (t.security_name && t.security_name.length > 0)
-      ? `<div class="muted" style="font-size: 11px;">${t.security_name}</div>` : "";
+      ? `<div class="muted" style="font-size: 11px;">${esc(t.security_name)}</div>` : "";
     const secId = t.security_id || "—";
     return `<tr>
       <td>${formatDate(t.process_date)}</td>
-      <td style="color: var(--muted); font-size: 12px;">${t.account_name || "—"}</td>
+      <td style="color: var(--muted); font-size: 12px;">${esc(t.account_name || "—")}</td>
       <td>${categoryPill(t)}</td>
-      <td class="ticker">${secId}${security}</td>
-      <td style="font-size: 12px;">${desc}</td>
+      <td class="ticker">${esc(secId)}${security}</td>
+      <td style="font-size: 12px;">${esc(desc)}</td>
       <td class="num">${fmtMoney(t.amount, { currency: true })}</td>
-      <td class="tx-id">${t.transaction_id}</td>
+      <td class="tx-id">${esc(t.transaction_id)}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="7" class="empty">Sin movimientos que coincidan con los filtros</td></tr>`;
 }
